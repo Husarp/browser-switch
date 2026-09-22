@@ -1,0 +1,7 @@
+# Rebuilt in a second by build.cmd from BrowserSwitch.cs, which is in the repository.
+BrowserSwitch.exe
+
+# Which mode is on right now, and output from running it - state, not source.
+mode.txt
+errors.log
+dry-run.log
