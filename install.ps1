@@ -165,7 +165,7 @@ if (-not (Test-Path $uninstallKey)) { New-Item -Path $uninstallKey -Force | Out-
 $uninstallCmd = "`"$PSHOME\powershell.exe`" -NoProfile -ExecutionPolicy Bypass -File `"$here\uninstall.ps1`""
 Set-Key $uninstallKey $name 'DisplayName'
 Set-Key $uninstallKey "$exe,0" 'DisplayIcon'
-Set-Key $uninstallKey '2.3.0' 'DisplayVersion'
+Set-Key $uninstallKey '2.7.7' 'DisplayVersion'
 Set-Key $uninstallKey $here 'InstallLocation'
 Set-Key $uninstallKey $uninstallCmd 'UninstallString'
 New-ItemProperty -Path $uninstallKey -Name 'NoModify' -Value 1 -PropertyType DWord -Force | Out-Null

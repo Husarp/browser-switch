@@ -112,11 +112,17 @@ To set a category up: select it on the left, select a profile on the right, pres
 
 ## Setting it up
 
-Needs Windows 10 or 11. Nothing to download: the C# compiler it is built with is part of Windows
-(.NET Framework 4).
+Needs Windows 10 or 11.
 
-1. **Double-click `build.cmd`** — it makes `BrowserSwitch.exe` in the same folder. Keep the folder
-   where it is afterwards; Windows is told to run the program from there.
+1. **Get the program**, either way:
+   - **Download** `BrowserSwitch-<version>.zip` from the
+     [Releases page](https://github.com/Husarp/browser-switch/releases) and unzip it into a folder
+     you will keep. The program is not signed, so Windows may say *"Windows protected your PC"* the
+     first time — *More info → Run anyway*.
+   - or **build it**: double-click `build.cmd`, which makes `BrowserSwitch.exe` with the C# compiler
+     already inside Windows (.NET Framework 4). Nothing is downloaded.
+
+   Keep the folder where it is afterwards: Windows is told to run the program from there.
 2. **Double-click `Install.cmd`** from File Explorer. It runs `install.ps1` and waits for a key so
    you can read the result. Run it yourself: registry changes made from inside some programs — AI
    coding assistants included — land in a private copy of the registry that only that program sees,
