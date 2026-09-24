@@ -1,4 +1,0 @@
-# Which browser each mode means. Change a path here and it takes effect immediately - the switcher
-# reads this file every time, nothing needs rebuilding.
-personal=C:\Program Files\Mozilla Firefox\firefox.exe
-work=C:\Program Files\Google\Chrome\Application\chrome.exe

@@ -1,7 +1,13 @@
-# Rebuilt in a second by build.cmd from BrowserSwitch.cs, which is in the repository.
+# Rebuilt in a second by build.cmd from the .cs files, which are here.
 BrowserSwitch.exe
 
-# Which mode is on right now, and output from running it - state, not source.
-mode.txt
+# Working notes about the PC it was built on - kept locally, not published.
+CHANGELOG.md
+TODO.md
+
+# Your categories and the output of running it - state, not source.
+config.txt
 errors.log
 dry-run.log
+detected.txt
+selftest.txt
