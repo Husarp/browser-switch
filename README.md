@@ -108,6 +108,7 @@ To set a category up: select it on the left, select a profile on the right, pres
 | `uninstall.ps1` | removes it completely |
 | `build.cmd` | rebuilds the program |
 | `BrowserSwitch.ico` | the icon — two opposite arrows — built into the exe |
+| `LICENSE` | MIT — use, change and share it freely, keeping the copyright notice |
 
 ## Setting it up
 
