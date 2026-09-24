@@ -92,9 +92,14 @@
 
         # 4. register it with Windows and start it
         if ($testing) { Say '(testing: not registered, not started)'; return }
+        # In a PowerShell of its own that may run it: pasted into a normal PowerShell window, this
+        # command runs, but Windows' default policy blocks script files such as install.ps1.
         # (install.ps1 of releases before 3.8.0 does not know -Quiet)
         $install = Join-Path $dir 'install.ps1'
-        if ((Get-Command $install).Parameters.ContainsKey('Quiet')) { & $install -Quiet } else { & $install }
+        $go = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $install)
+        if ((Get-Content $install -Raw) -match '\[switch\]\$Quiet') { $go += '-Quiet' }
+        & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') @go
+        if ($LASTEXITCODE -ne 0) { throw 'Registering Browser Switch with Windows failed - see above.' }
         if ($update) { Start-Process $exe -ArgumentList '--tray' } else { Start-Process $exe }
         Say ''
         if ($update) { Say 'Updated. Browser Switch is running again.' 'Green' }
