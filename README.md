@@ -370,7 +370,9 @@ and `--dry` reports exactly what a real click would do, so the two can never dis
    still exists;
 2. the live category, if its browser still exists;
 3. otherwise the browser that was your default **before** Browser Switch was installed — recorded at
-   install time, so a machine with nothing set up behaves exactly as it did before;
+   install time, so a machine with nothing set up behaves exactly as it did before (installed again
+   or moved while Browser Switch already is the default, it is taken over from the copy installed
+   before);
 4. otherwise the first browser Windows lists.
 
 Anything unexpected is written to `errors.log`. Tested against: no config at all, a config with no

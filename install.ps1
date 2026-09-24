@@ -16,6 +16,10 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe  = Join-Path $here 'BrowserSwitch.exe'
 if (-not (Test-Path $exe)) { throw "BrowserSwitch.exe is missing - run build.cmd first." }
 
+# Where Browser Switch was installed before this, if anywhere - read now, before this run records its
+# own place. Installed again or moved, it takes over the original browser remembered there (step 5).
+$previousHome = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BrowserSwitch' -ErrorAction SilentlyContinue).InstallLocation
+
 $progId = 'BrowserSwitchURL'
 $app    = 'BrowserSwitch'     # the client key name AND the name in RegisteredApplications - Firefox
                               # and Brave use the same token for both, so this does too
@@ -201,6 +205,15 @@ if (-not (Test-Path $config)) {
     $cmd = (Get-ItemProperty "HKCU:\Software\Classes\$progId\shell\open\command" -ErrorAction SilentlyContinue).'(default)'
     if (-not $cmd) { $cmd = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\$progId\shell\open\command" -ErrorAction SilentlyContinue).'(default)' }
     if ($cmd -match '"([^"]+\.exe)"') { $fallback = $Matches[1] }
+  }
+  # Browser Switch itself is the default already - installed again, or moved: the browser used
+  # before it is the one the earlier copy remembered
+  if (-not $fallback -and $progId -like 'BrowserSwitch*' -and $previousHome -and ($previousHome.TrimEnd('\') -ne $here.TrimEnd('\'))) {
+    $line = Get-Content (Join-Path $previousHome 'config.txt') -ErrorAction SilentlyContinue | Where-Object { $_ -like 'fallback=*' } | Select-Object -First 1
+    if ($line -and (Test-Path $line.Substring(9).Trim())) {
+      $fallback = $line.Substring(9).Trim()
+      Write-Host "Browser Switch is already the default - the original browser is taken over from $previousHome"
+    }
   }
   $lines = @('# Browser Switch. Edit by hand if you like - the window writes the same thing.',
              '# category=<name>|<browser exe>|<profile arguments>|<what to show>', '', 'active=')
