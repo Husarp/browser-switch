@@ -741,25 +741,25 @@ class BrowserTree : TreeView
         try { SetWindowTheme(Handle, "explorer", null); } catch { }
     }
 
-    protected override void OnNodeMouseClick(TreeNodeMouseClickEventArgs e)
-    {
-        base.OnNodeMouseClick(e);
-        // a click on the arrow itself is handled by Windows already
-        if (e.Button == MouseButtons.Left && e.Node.Level == 0 && HitTest(e.Location).Location != TreeViewHitTestLocations.PlusMinus)
-            e.Node.Toggle();
-    }
-
-    // Windows also opens or closes a row on a double-click; on a browser's row that would undo the
-    // click just made, so a second quick click there counts as one more click. On a profile a
-    // double-click stays what it was: use this profile.
+    // A browser's row - anywhere on it, its arrow included - opens or closes on the very press of the
+    // button, handled here and not passed on. Passed on, Windows would first watch the mouse for a
+    // moment to see whether a drag starts, and a quick next click could get lost in that moment:
+    // every second or third click did nothing. A quick second click arrives as a double-click; on a
+    // browser's row it simply counts as one more click. Profiles keep Windows' own handling: a click
+    // selects one, a double-click means "use this profile".
     protected override void WndProc(ref Message m)
     {
-        const int WM_LBUTTONDBLCLK = 0x0203;
-        if (m.Msg == WM_LBUTTONDBLCLK)
+        const int WM_LBUTTONDOWN = 0x0201, WM_LBUTTONDBLCLK = 0x0203;
+        if (m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK)
         {
             var at = new Point((short)(m.LParam.ToInt64() & 0xFFFF), (short)((m.LParam.ToInt64() >> 16) & 0xFFFF));
-            var hit = HitTest(at);
-            if (hit.Node != null && hit.Node.Level == 0) { hit.Node.Toggle(); return; }
+            var node = HitTest(at).Node;
+            if (node != null && node.Level == 0)
+            {
+                if (!Focused) Focus();
+                node.Toggle();
+                return;
+            }
         }
         base.WndProc(ref m);
     }

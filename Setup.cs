@@ -185,6 +185,8 @@ partial class SwitchForm
         todo.Top = 0; todo.Margin = new Padding(0);
         todo.Controls.Add(Text_(
             "1.  Press Open Windows Settings below - it opens on Browser Switch's own page.\n" +
+            "     Give it a few seconds: Settings first looks Browser Switch up, and only then shows the Set default\n" +
+            "     button at the top. Wait for it - nothing is wrong.\n" +
             "2.  Windows 11: press Set default at the top of that page.\n" +
             "     Windows 10: under Web browser, click the browser shown and choose Browser Switch.\n" +
             "3.  Come back here - this screen notices by itself and takes you on."));
@@ -202,7 +204,8 @@ partial class SwitchForm
             if (IsDefaultBrowser) { SetupStep(4); return; }
             OpenDefaultAppsSettings();
             setupStatus.ForeColor = SystemColors.GrayText;
-            setupStatus.Text = "Waiting for Windows…";
+            setupStatus.Text = "Settings is opening - it can take a few seconds until Set default appears at the top. " +
+                               "Waiting for you to press it…";
         };
         setupDefault.Controls.Add(NavRow(setupGo, Link("←  Back", () => SetupStep(2)), Link("Skip for now", LeaveSetup)));
         setupStatus = new Label { AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(2, 10, 0, 12) };

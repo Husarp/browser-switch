@@ -37,8 +37,8 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyProduct("Browser Switch")]
 [assembly: System.Reflection.AssemblyCompany("Browser Switch")]
 [assembly: System.Reflection.AssemblyDescription("Sends each link to the browser and profile you chose")]
-[assembly: System.Reflection.AssemblyVersion("3.12.2.0")]
-[assembly: System.Reflection.AssemblyFileVersion("3.12.2.0")]
+[assembly: System.Reflection.AssemblyVersion("3.12.4.0")]
+[assembly: System.Reflection.AssemblyFileVersion("3.12.4.0")]
 
 // ---- what we know about the machine ------------------------------------------------------------
 
