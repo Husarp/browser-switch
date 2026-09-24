@@ -37,8 +37,8 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyProduct("Browser Switch")]
 [assembly: System.Reflection.AssemblyCompany("Browser Switch")]
 [assembly: System.Reflection.AssemblyDescription("Sends each link to the browser and profile you chose")]
-[assembly: System.Reflection.AssemblyVersion("3.3.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("3.3.0.0")]
+[assembly: System.Reflection.AssemblyVersion("3.12.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("3.12.2.0")]
 
 // ---- what we know about the machine ------------------------------------------------------------
 
@@ -288,6 +288,23 @@ static class Config
     public static List<Rule> Rules = new List<Rule>();
     public static string RulesKey = "", RulesDefault = "";
     public static bool RulesKeyOn = true;
+    // Link cleaning (Cleaner.cs): tracking parts removed, redirects skipped - both on to begin with.
+    // The lists hold what you switched off, and the tracking parts you added ("name|sites").
+    public static bool CleanOn = true, UnwrapOn = true;
+    // The link log (LinkLog.cs), kept on this PC only.
+    public static bool LogOn = true;
+    // Updates (Updater.cs): asking GitHub once a day is off until turned on. LastVersion is the
+    // version that last ran, so the dock can say when an update has happened.
+    public static bool UpdateCheck;
+    public static DateTime UpdateChecked = DateTime.MinValue;
+    public static string LastVersion = "";
+    // A taskbar button while the window is open (off: the window lives only in the dock), and
+    // whether the note saying where Browser Switch keeps running has been shown once.
+    public static bool TaskbarButton = true, ClosedOnce;
+    // The setup screen has been seen (Finish or Skip). Until then the window opens on it, even if
+    // Browser Switch is the default browser already; afterwards only while it is not.
+    public static bool SetupDone;
+    public static List<string> CleanOff = new List<string>(), UnwrapOff = new List<string>(), CleanAdded = new List<string>();
     // What .htm / .html files look like in File Explorer (FileIcon.cs): "page", "browser" or "own".
     public static string FileIconStyle = "page";
 
@@ -302,6 +319,18 @@ static class Config
     //     next-on=yes                              ("no": kept, but not in use)
     //     previous-on=yes
     //     fileicon=page                            (or "browser", or "own": see FileIcon.cs)
+    //     taskbar=on                               ("off": no taskbar button, the window lives in the dock)
+    //     closed-once=yes                          (the "still running next to the clock" note was shown)
+    //     setup=done                               (the setup screen has been seen)
+    //     updates=off                              ("on": ask GitHub once a day for a newer version)
+    //     update-checked=2026-09-24 11:20          (when it last asked)
+    //     version=3.9.0                            (the version that last ran)
+    //     log=on                                   (keep a log of links, link-log.txt; LinkLog.cs)
+    //     clean=on                                 (remove tracking parts from links; Cleaner.cs)
+    //     unwrap=on                                (skip redirects such as google.com/url?q=...)
+    //     clean-off=si@youtube.com youtu.be open.spotify.com    (one line per part switched off)
+    //     unwrap-off=google.*/url                  (one line per redirect switched off)
+    //     clean-add=ref|example.com                (a part of your own, and where; empty = everywhere)
     //     rules=on                                 ("off": every rule kept, none used)
     //     rules-key=Ctrl+Alt+R                     (turns rules on and off)
     //     default-rules-key=Ctrl+Alt+R
@@ -323,8 +352,10 @@ static class Config
         Categories.Clear(); Active = ""; FallbackExe = ""; ShortcutsOn = false; NextKey = ""; PrevKey = ""; TipSwitchTo = false;
         NextDefault = ""; PrevDefault = ""; NextOn = true; PrevOn = true; RulesOn = true; Rules.Clear();
         RulesKey = ""; RulesDefault = ""; RulesKeyOn = true; FileIconStyle = "page";
+        CleanOn = true; UnwrapOn = true; CleanOff.Clear(); UnwrapOff.Clear(); CleanAdded.Clear(); LogOn = true;
+        UpdateCheck = false; UpdateChecked = DateTime.MinValue; LastVersion = ""; TaskbarButton = true; ClosedOnce = false; SetupDone = false;
         LastText = text;
-        bool keysSeen = false, nextDefaultSeen = false, prevDefaultSeen = false, rulesKeySeen = false;
+        bool keysSeen = false, nextDefaultSeen = false, prevDefaultSeen = false, rulesKeySeen = false, setupSeen = false;
         foreach (string raw in text.Split('\n'))
         {
             string line = raw.Trim();
@@ -345,6 +376,24 @@ static class Config
                 FileIconStyle = v == "browser" || v == "own" ? v : "page";
                 continue;
             }
+            if (line.StartsWith("setup=", StringComparison.OrdinalIgnoreCase)) { SetupDone = line.Substring(6).Trim().ToLowerInvariant() == "done"; setupSeen = true; continue; }
+            if (line.StartsWith("taskbar=", StringComparison.OrdinalIgnoreCase)) { TaskbarButton = line.Substring(8).Trim().ToLowerInvariant() != "off"; continue; }
+            if (line.StartsWith("closed-once=", StringComparison.OrdinalIgnoreCase)) { ClosedOnce = line.Substring(12).Trim().ToLowerInvariant() == "yes"; continue; }
+            if (line.StartsWith("updates=", StringComparison.OrdinalIgnoreCase)) { UpdateCheck = line.Substring(8).Trim().ToLowerInvariant() == "on"; continue; }
+            if (line.StartsWith("update-checked=", StringComparison.OrdinalIgnoreCase))
+            {
+                DateTime when;
+                if (DateTime.TryParseExact(line.Substring(15).Trim(), "yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture,
+                                           System.Globalization.DateTimeStyles.None, out when)) UpdateChecked = when;
+                continue;
+            }
+            if (line.StartsWith("version=", StringComparison.OrdinalIgnoreCase)) { LastVersion = line.Substring(8).Trim(); continue; }
+            if (line.StartsWith("log=", StringComparison.OrdinalIgnoreCase)) { LogOn = line.Substring(4).Trim().ToLowerInvariant() != "off"; continue; }
+            if (line.StartsWith("clean=", StringComparison.OrdinalIgnoreCase)) { CleanOn = line.Substring(6).Trim().ToLowerInvariant() != "off"; continue; }
+            if (line.StartsWith("unwrap=", StringComparison.OrdinalIgnoreCase)) { UnwrapOn = line.Substring(7).Trim().ToLowerInvariant() != "off"; continue; }
+            if (line.StartsWith("clean-off=", StringComparison.OrdinalIgnoreCase)) { CleanOff.Add(line.Substring(10).Trim()); continue; }
+            if (line.StartsWith("unwrap-off=", StringComparison.OrdinalIgnoreCase)) { UnwrapOff.Add(line.Substring(11).Trim()); continue; }
+            if (line.StartsWith("clean-add=", StringComparison.OrdinalIgnoreCase)) { CleanAdded.Add(line.Substring(10).Trim()); continue; }
             if (line.StartsWith("rules-key=", StringComparison.OrdinalIgnoreCase)) { RulesKey = line.Substring(10).Trim(); continue; }
             if (line.StartsWith("default-rules-key=", StringComparison.OrdinalIgnoreCase)) { RulesDefault = line.Substring(18).Trim(); rulesKeySeen = true; continue; }
             if (line.StartsWith("rules-key-on=", StringComparison.OrdinalIgnoreCase)) { RulesKeyOn = line.Substring(13).Trim().ToLowerInvariant() != "no"; continue; }
@@ -385,6 +434,9 @@ static class Config
             if (!prevDefaultSeen) PrevDefault = prev;
             Suggested = true;
         }
+        // a file from before the setup screen existed, already with categories: someone who set it up
+        // by hand long ago - no need to walk them through it now
+        if (!setupSeen && Categories.Count > 0) SetupDone = true;
         // a file from before the rules shortcut existed: suggest one, as for the others
         if (!rulesKeySeen)
         {
@@ -470,6 +522,19 @@ static class Config
         sb.AppendLine("next-on=" + (NextOn ? "yes" : "no"));
         sb.AppendLine("previous-on=" + (PrevOn ? "yes" : "no"));
         sb.AppendLine("fileicon=" + FileIconStyle);
+        sb.AppendLine("taskbar=" + (TaskbarButton ? "on" : "off"));
+        if (ClosedOnce) sb.AppendLine("closed-once=yes");
+        if (SetupDone) sb.AppendLine("setup=done");
+        sb.AppendLine("updates=" + (UpdateCheck ? "on" : "off"));
+        if (UpdateChecked != DateTime.MinValue)
+            sb.AppendLine("update-checked=" + UpdateChecked.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture));
+        if (LastVersion.Length > 0) sb.AppendLine("version=" + LastVersion);
+        sb.AppendLine("log=" + (LogOn ? "on" : "off"));
+        sb.AppendLine("clean=" + (CleanOn ? "on" : "off"));
+        sb.AppendLine("unwrap=" + (UnwrapOn ? "on" : "off"));
+        foreach (var x in CleanOff) sb.AppendLine("clean-off=" + x);
+        foreach (var x in UnwrapOff) sb.AppendLine("unwrap-off=" + x);
+        foreach (var x in CleanAdded) sb.AppendLine("clean-add=" + x);
         sb.AppendLine("rules=" + (RulesOn ? "on" : "off"));
         sb.AppendLine("rules-key=" + RulesKey);
         sb.AppendLine("default-rules-key=" + RulesDefault);
@@ -546,6 +611,7 @@ static class Program
                     sb.AppendLine("browsers in tree:  " + f.BrowserCount);
                     sb.AppendLine("profiles in tree:  " + f.ProfileCount);
                     sb.AppendLine("switch buttons:    " + f.SwitchButtonCount);
+                    sb.AppendLine("tabs:              " + f.TabNames);
                     sb.AppendLine("header says:       " + f.HeaderText);
                     sb.AppendLine("is default browser: " + f.IsDefaultBrowser + (f.IsDefaultBrowser ? "" : "   (warning strip shown)"));
                 }
@@ -584,10 +650,20 @@ static class Program
                 sb.AppendLine("rules:             " + (Config.RulesOn ? "on" : "off") + " - " + Config.Rules.Count + " (" +
                     Config.Rules.Count(r => r.On) + " ticked)" + (Config.Rules.Count > 0 ? ": " +
                     string.Join(", ", Config.Rules.Select(r => r.Describe() + " -> " + r.Category + (r.On ? "" : " (off)"))) : ""));
+                sb.AppendLine("link cleaning:     tracking " + (Config.CleanOn ? "on" : "off") + " (" +
+                    Cleaner.Parts().Count(Cleaner.IsOn) + " of " + Cleaner.Parts().Count() + " parts), redirects " +
+                    (Config.UnwrapOn ? "on" : "off") + " (" + Cleaner.Redirects.Count(Cleaner.IsOn) + " of " + Cleaner.Redirects.Count + ")");
+                sb.AppendLine("updates:           " + (Config.UpdateCheck ? "checked once a day" : "off - checked only when asked") +
+                    (Config.UpdateChecked != DateTime.MinValue ? ", last " + Config.UpdateChecked.ToString("yyyy-MM-dd HH:mm") : ""));
+                sb.AppendLine("link log:          " + (Config.LogOn ? "on" : "off") + " - " + LinkLog.Read().Count + " links kept");
                 sb.AppendLine("rules on/off key:  " + (Config.RulesKey.Length > 0 ? Config.RulesKey : "(none)") + (Config.RulesKeyOn ? "" : " (off)"));
-                using (var rd = new RulesDialog(() => { }))
+                using (var rp = new RulesPage(() => { }))
+                using (var kp = new ShortcutsPage(null, () => { }))
+                using (var cp = new CleaningPage(() => { }))
+                using (var lp = new LogPage(() => { }))
+                using (var up = new AboutPage(() => { }, () => { }))
                 using (var ap = new AppPicker())
-                    sb.AppendLine("rules window built: " + rd.Text + ", app list built: " + ap.Text + " (" + AppCatalog.All.Count +
+                    sb.AppendLine("rules and shortcuts tabs built, app list built: " + ap.Text + " (" + AppCatalog.All.Count +
                                   " apps in " + AppCatalog.Groups.Length + " groups, " + Router.Recent().Count + " seen lately)");
                 File.WriteAllText(Path.Combine(Config.Dir, "selftest.txt"), sb.ToString());
                 return 0;
@@ -607,11 +683,12 @@ static class Program
             if (args[0] == "--dry")
             {
                 string exe, extra, why;
-                string url = args.Length > 1 ? args[1] : "";
+                string asked = args.Length > 1 ? args[1] : "", changes;
                 string from = args.Length > 3 && args[2] == "--from" ? args[3] : null;
+                string url = Cleaner.Apply(asked, out changes);
                 Resolve(url, from, out exe, out extra, out why);
                 File.WriteAllText(Path.Combine(Config.Dir, "dry-run.log"),
-                    why + "\t" + exe + "\t" + extra + "\t" + url);
+                    why + "\t" + exe + "\t" + extra + "\t" + url + "\t" + changes);
                 return 0;
             }
             Open(args[0]);
@@ -680,6 +757,14 @@ static class Program
         why = "fallback (first browser found)";
     }
 
+    // A browser by the name Windows gives it - "Mozilla Firefox" - or its file name.
+    static string BrowserName(string exe)
+    {
+        if (string.IsNullOrEmpty(exe)) return "(no browser)";
+        var b = Machine.Browsers().FirstOrDefault(x => string.Equals(x.Exe, exe, StringComparison.OrdinalIgnoreCase));
+        return b != null ? b.Name : Path.GetFileNameWithoutExtension(exe);
+    }
+
     // The browser that was the default before Browser Switch, by the name Windows gives it.
     public static string OriginalBrowserName()
     {
@@ -699,7 +784,12 @@ static class Program
         string exe, extra, why;
         string source = Router.SourceApp();
         Router.Remember(source);
-        Resolve(url, source, out exe, out extra, out why);
+        string changes, asked = url;
+        url = Cleaner.Apply(url, out changes);     // redirects skipped, tracking removed - before the rules look
+        Category chosen;
+        Resolve(url, source, out exe, out extra, out why, out chosen);
+        LinkLog.Add(new LinkLog.Entry { When = DateTime.Now, From = source ?? "", Asked = asked, Opened = url, Changes = changes,
+                                        Why = why, OpenedIn = chosen != null ? chosen.Name : BrowserName(exe) });
         if (exe.Length > 0) Launch(exe, extra, url);
     }
 

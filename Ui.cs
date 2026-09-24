@@ -30,8 +30,17 @@ static class Ui
         var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(3, 0, 3, 2) };
         row.Controls.Add(new Label { Text = text, AutoSize = true, Font = new Font("Segoe UI", 8F), ForeColor = SystemColors.GrayText,
                                      Margin = new Padding(0, 2, 0, 0) });
-        if (help != null) row.Controls.Add(new HelpMark(help) { Size = new Size(15, 15), Margin = new Padding(3, 1, 0, 0) });
+        if (help != null) row.Controls.Add(new HelpMark(help) { Size = new Size(17, 17), Margin = new Padding(4, 0, 0, 0) });
         return row;
+    }
+
+    // Everything you can click shows the hand cursor: every button and tick box in this window, and
+    // any added to it later - tabs are built when opened, the switch row after every change.
+    public static void HandCursors(Control c)
+    {
+        if (c is ButtonBase) c.Cursor = Cursors.Hand;   // buttons, tick boxes, choices
+        c.ControlAdded += (s, e) => HandCursors(e.Control);
+        foreach (Control child in c.Controls) HandCursors(child);
     }
 
     // A heading docked across the top of a panel.
@@ -56,8 +65,8 @@ class HelpMark : Control
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.SupportsTransparentBackColor | ControlStyles.ResizeRedraw, true);
         BackColor = Color.Transparent;
-        Size = new Size(17, 17);
-        Margin = new Padding(5, 2, 0, 0);
+        Size = new Size(20, 20);
+        Margin = new Padding(5, 1, 0, 0);
         Cursor = Cursors.Help;
         TabStop = false;
         AccessibleRole = AccessibleRole.HelpBalloon;
@@ -74,13 +83,16 @@ class HelpMark : Control
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        var ring = new Rectangle(0, 0, Width - 1, Height - 1);
-        using (var fill = new SolidBrush(over ? Ui.Accent : Color.FromArgb(128, 138, 152))) g.FillEllipse(fill, ring);
-        using (var f = new Font("Segoe UI", Height * 0.5F, FontStyle.Bold, GraphicsUnit.Pixel))
+        // a light blue disc with a blue ring and question mark; pointed at, it fills in blue
+        var ring = new RectangleF(0.75F, 0.75F, Width - 2.5F, Height - 2.5F);
+        using (var fill = new SolidBrush(over ? Ui.Accent : Color.FromArgb(232, 241, 252))) g.FillEllipse(fill, ring);
+        using (var edge = new Pen(over ? Ui.Accent : Color.FromArgb(110, 160, 215), 1.25F)) g.DrawEllipse(edge, ring);
+        using (var f = new Font("Segoe UI", Height * 0.6F, FontStyle.Bold, GraphicsUnit.Pixel))
+        using (var ink = new SolidBrush(over ? Color.White : Ui.Accent))
         using (var centre = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
         {
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            g.DrawString("?", f, Brushes.White, new RectangleF(0, 0.5F, Width, Height), centre);
+            g.DrawString("?", f, ink, new RectangleF(0, 0.5F, Width, Height - 0.5F), centre);
         }
     }
 

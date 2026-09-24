@@ -12,4 +12,6 @@ dry-run.log
 detected.txt
 selftest.txt
 recent-apps.txt
+link-log.txt
 file-icons/
+reset-backup-*/

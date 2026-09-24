@@ -52,6 +52,8 @@ class Tray : ApplicationContext
     readonly System.Windows.Forms.Timer settle = new System.Windows.Forms.Timer { Interval = 250 };
     readonly Note note = new Note();
     readonly HotkeyWindow keys = new HotkeyWindow();
+    readonly System.Windows.Forms.Timer updateClock = new System.Windows.Forms.Timer { Interval = 60 * 1000 };
+    string announced;   // the newer version already mentioned, so it is said once
     readonly Dictionary<int, string> keyTargets = new Dictionary<int, string>();   // shortcut id -> category
     SwitchForm window;
     string lastActive, lastRules, pinnedShape = "", keysShape = "";
@@ -73,6 +75,18 @@ class Tray : ApplicationContext
         keys.Pressed += Pressed;
         RegisterKeys();
         FileIcon.Update();
+
+        // after an update: say which version runs now (the first run of all says nothing)
+        if (Config.LastVersion != Updater.Current)
+        {
+            bool updated = Config.LastVersion.Length > 0;
+            Config.LastVersion = Updater.Current;
+            Config.Save();
+            if (updated) note.Say("Browser Switch updated", "Now version " + Updater.Current, null);
+        }
+        // the daily question to GitHub - only if it was turned on; first a minute after starting
+        updateClock.Tick += delegate { updateClock.Interval = 3600 * 1000; CheckForUpdate(); };
+        updateClock.Start();
 
         // config.txt also changes from outside: other copies of this program (--switch, --reset) and
         // by hand. Writes come in bursts, so wait a moment for it to settle before reading.
@@ -99,10 +113,39 @@ class Tray : ApplicationContext
             window.Saved = Refresh;                          // its own changes reach the dock at once
             window.PauseShortcuts = PauseKeys;
             window.ShortcutFree = keys.IsFree;
+            window.FormClosed += delegate { SayWhereItIs(); };
         }
         window.Show();
         if (window.WindowState == FormWindowState.Minimized) window.WindowState = FormWindowState.Normal;
         window.Activate();
+    }
+
+    // Asks GitHub for the newest version, if allowed and not asked in the last day. Only a newer
+    // version is ever mentioned - once - and nothing is downloaded until you choose to update.
+    void CheckForUpdate()
+    {
+        if (!Config.UpdateCheck || (DateTime.Now - Config.UpdateChecked).TotalHours < 24) return;
+        Updater.CheckInBackground(ui, (latest, problem) =>
+        {
+            if (problem != null) return;          // offline, or GitHub not answering: ask again later
+            Config.Save();                        // when it last asked
+            if (Updater.UpdateWaiting && latest != announced)
+            {
+                announced = latest;
+                note.Say("Browser Switch " + latest + " is available", "Right-click the dock icon - Update to " + latest, null);
+            }
+        });
+    }
+
+    // The first time the window is closed, a note says Browser Switch is still running and where -
+    // otherwise it can look as if it has gone.
+    void SayWhereItIs()
+    {
+        if (Config.ClosedOnce) return;
+        Config.ClosedOnce = true;
+        Config.Save();
+        using (var icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath))
+            note.Say("Browser Switch keeps running", "Its icon is next to the clock (under ^ if hidden) - click it to open the window again", icon);
     }
 
     void SwitchTo(Category c)
@@ -289,6 +332,13 @@ class Tray : ApplicationContext
     void FillMenu()
     {
         menu.Items.Clear();
+        if (Updater.UpdateWaiting)
+        {
+            var update = new ToolStripMenuItem("Update to " + Updater.Latest + "…") { Font = new Font(menu.Font, FontStyle.Bold) };
+            update.Click += (s, e) => { OpenWindow(); window.ShowTabNamed("About"); };
+            menu.Items.Add(update);
+            menu.Items.Add(new ToolStripSeparator());
+        }
         foreach (var c in Config.Categories)
         {
             string name = c.Name;
@@ -332,12 +382,14 @@ class Tray : ApplicationContext
             tips.DropDownItems.Add(switchTo);
             menu.Items.Add(tips);
         }
+        menu.Items.Add("Link log…", null, (s, e) => { OpenWindow(); window.ShowTabNamed("Link log"); });
         menu.Items.Add("Open Browser Switch", null, (s, e) => OpenWindow());
         menu.Items.Add("Exit", null, (s, e) => Exit());
     }
 
     void Exit()
     {
+        updateClock.Stop();
         watcher.EnableRaisingEvents = false;
         if (window != null && !window.IsDisposed) window.Close();
         main.Visible = false; main.Dispose();

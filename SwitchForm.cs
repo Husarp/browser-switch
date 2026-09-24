@@ -1,10 +1,11 @@
 ﻿// The window you get when you click Browser Switch.
 //
-// Top    - what links open in right now, and the switch for all rules.
-// Left   - your categories, and what each one points at.
-// Right  - every browser on this machine, with its profiles underneath.
-// Bottom - one button per category (click it and links go there from that moment on), Rules…
-//          and Shortcuts…. Explanations sit behind the small "?" marks (Ui.cs).
+// Top    - what links open in right now.
+// Tabs   - Categories: your categories on the left, every browser and its profiles on the right.
+//          Rules (Rules.cs), Shortcuts (Shortcuts.cs), and the rest.
+// Bottom - one button per category: click it and links go there from that moment on.
+// Explanations sit behind the small "?" marks (Ui.cs). Until Browser Switch is the default browser,
+// the setup screen (Setup.cs) shows instead.
 
 using System;
 using System.Collections.Generic;
@@ -13,17 +14,20 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
-class SwitchForm : Form
+partial class SwitchForm : Form
 {
     readonly List<Browser> browsers = Machine.Browsers();
-    readonly ToolTip hints = new ToolTip();
     Label header, caption;
     PictureBox headerIcon;
-    CheckBox useRules;
-    Label rulesCount;
     ListBox categoryList;
-    TreeView browserTree;
-    Button assign, rename, remove, iconButton, rulesButton;
+    BrowserTree browserTree;
+    Button assign, rename, remove, iconButton;
+    TabControl tabs;
+    readonly ImageList treeIcons = new ImageList { ImageSize = new Size(20, 20), ColorDepth = ColorDepth.Depth32Bit };
+    TabPage categoriesPage, rulesPage, shortcutsPage, cleaningPage, logPage, aboutPage;
+    SplitContainer split;
+    bool keysPaused;           // the dock's shortcuts are let go while the Shortcuts tab is open
+    Control warning;           // the yellow "not switched on yet" strip
     CheckBox inDock;
     PictureBox iconPreview;
     bool filling;              // true while controls are being set to match the settings, not by you
@@ -40,15 +44,16 @@ class SwitchForm : Form
     {
         Text = "Browser Switch";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        ShowInTaskbar = false;     // it lives in the dock; closing it hides it back there
-        Size = new Size(760, 580);
-        MinimumSize = new Size(640, 460);
+        ShowInTaskbar = Config.TaskbarButton;   // a taskbar button while open, unless set to live in the dock only
+        Activated += delegate { CheckDefault(); };   // Settings may have changed the default browser meanwhile
+        Size = new Size(860, 640);
+        MinimumSize = new Size(700, 500);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9F);
 
         // Minimum sizes and the splitter position are set further down, once this is inside the form.
         // A SplitContainer is 150px wide until it is docked, and setting them here throws.
-        var split = new SplitContainer { Dock = DockStyle.Fill };
+        split = new SplitContainer { Dock = DockStyle.Fill };
         split.Panel1.Padding = new Padding(10, 6, 6, 8);
         split.Panel2.Padding = new Padding(6, 6, 10, 8);
 
@@ -85,7 +90,8 @@ class SwitchForm : Form
         split.Panel1.Controls.Add(dockRow);
 
         // ---- right: browsers and their profiles ----
-        browserTree = new TreeView { Dock = DockStyle.Fill, HideSelection = false, ShowLines = true, ItemHeight = 22 };
+        browserTree = new BrowserTree { Dock = DockStyle.Fill, HideSelection = false, ShowLines = false, FullRowSelect = true,
+                                     ItemHeight = 28, Indent = 26, ImageList = treeIcons, BorderStyle = BorderStyle.FixedSingle };
         browserTree.AfterSelect += delegate { UpdateButtons(); };
         browserTree.DoubleClick += delegate { Assign(); };
 
@@ -102,60 +108,55 @@ class SwitchForm : Form
         // ---- bottom: one button per category, and the extra settings ----
         var bottom = new Panel { Dock = DockStyle.Bottom, Height = 54, BackColor = Ui.Bar };
         switchRow = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(10, 10, 4, 8), WrapContents = false, AutoScroll = true };
-        var extras = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, Padding = new Padding(4, 10, 10, 8), WrapContents = false };
-        rulesButton = Button_("Rules…", delegate { EditRules(); });
-        rulesButton.Height = 32;
-        hints.SetToolTip(rulesButton, "Send links from chosen apps or websites to a chosen category");
-        extras.Controls.Add(rulesButton);
-        var keysButton = Button_("Shortcuts…", delegate { EditShortcuts(); });
-        keysButton.Height = 32;
-        hints.SetToolTip(keysButton, "Keyboard shortcuts for switching");
-        extras.Controls.Add(keysButton);
         bottom.Controls.Add(switchRow);
-        bottom.Controls.Add(extras);
 
-        Controls.Add(split);
-        Controls.Add(Header());
-        Controls.Add(NotDefaultWarning());
+        // ---- the tabs: Categories holds the two panels above; the others are built when opened ----
+        tabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(14, 5) };
+        categoriesPage = new TabPage("Categories") { UseVisualStyleBackColor = true };
+        categoriesPage.Controls.Add(split);
+        rulesPage = new TabPage("Rules") { UseVisualStyleBackColor = true };
+        shortcutsPage = new TabPage("Shortcuts") { UseVisualStyleBackColor = true };
+        cleaningPage = new TabPage("Link cleaning") { UseVisualStyleBackColor = true };
+        logPage = new TabPage("Link log") { UseVisualStyleBackColor = true };
+        aboutPage = new TabPage("About & updates") { UseVisualStyleBackColor = true };
+        tabs.TabPages.AddRange(new[] { categoriesPage, rulesPage, shortcutsPage, cleaningPage, logPage, aboutPage });
+        tabs.SelectedIndexChanged += delegate { ShowTab(); };
+        FormClosed += delegate { PauseKeys(false); };
+
+        var top = Header();
+        warning = NotDefaultWarning();
+        Controls.Add(tabs);
+        Controls.Add(top);
+        Controls.Add(warning);
         Controls.Add(bottom);
+        mainScreen.AddRange(new[] { tabs, top, warning, bottom });
 
-        // now that it has a real width, the panels can be given their limits
-        if (split.Width > 480)
+        // once the window is laid out and the panels have a real width, they can be given their limits
+        Load += delegate
         {
+            if (split.Width <= 480) return;
             split.Panel1MinSize = 220;
             split.Panel2MinSize = 240;
-            split.SplitterDistance = Math.Min(340, split.Width - 260);
-        }
+            split.SplitterDistance = Math.Min(360, split.Width - 280);
+        };
 
+        Ui.HandCursors(this);
         FillBrowsers();
         Reload();
+        if (!IsDefaultBrowser || !Config.SetupDone) ShowSetup();
     }
 
-    // The top: where links go right now, and the switch for all rules.
+    // The top: where links go right now.
     Control Header()
     {
-        var panel = new Panel { Dock = DockStyle.Top, Height = 96, BackColor = SystemColors.Window };
+        var panel = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = SystemColors.Window };
         headerIcon = new PictureBox { Left = 16, Top = 14, Size = new Size(32, 32), SizeMode = PictureBoxSizeMode.Zoom };
         caption = new Label { Left = 58, Top = 9, AutoSize = true, ForeColor = SystemColors.GrayText };
         header = new Label { Left = 58, Top = 26, AutoSize = true, Font = new Font("Segoe UI", 12F, FontStyle.Bold) };
 
-        useRules = new CheckBox { Text = "Use rules", AutoSize = true, Margin = new Padding(3, 5, 3, 3) };
-        useRules.CheckedChanged += delegate { if (filling) return; Config.RulesOn = useRules.Checked; Save(); Reload(); };
-        rulesCount = new Label { AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0, 6, 0, 0) };
-        var row = new FlowLayoutPanel { Left = 12, Top = 58, AutoSize = true, WrapContents = false };
-        row.Controls.Add(useRules);
-        row.Controls.Add(rulesCount);
-        row.Controls.Add(new HelpMark(
-            "One switch for all your link rules. Off: every link simply opens in the live category - switch " +
-            "category and links follow. On: a link that matches a rule goes where the rule says.\n" +
-            "Also in the dock's right-click menu, and on a keyboard shortcut (see Shortcuts…). " +
-            "Rules… sets up the rules themselves.")
-            { Margin = new Padding(6, 6, 0, 0) });
-
         panel.Controls.Add(headerIcon);
         panel.Controls.Add(caption);
         panel.Controls.Add(header);
-        panel.Controls.Add(row);
         panel.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = SystemColors.ControlLight });
         return panel;
     }
@@ -187,30 +188,61 @@ class SwitchForm : Form
             return k == null ? null : k.GetValue("ProgId") as string;
     }
 
+    // The default browser now - its name, as Windows lists it, and its program - or null. Found
+    // through the browsers' registrations: the one whose https handler is the chosen one.
+    static string[] CurrentDefault()
+    {
+        const string https = @"SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\https\";
+        return BrowserFor(ProgIdAt(https + @"UserChoiceLatest\ProgId") ?? ProgIdAt(https + "UserChoice"));
+    }
+
+    // The browser whose https handler is this one ("FirefoxURL-308046B0AF4A39CB"): name and program.
+    static string[] BrowserFor(string id)
+    {
+        if (id == null) return null;
+        foreach (var hive in new[] { Microsoft.Win32.Registry.CurrentUser, Microsoft.Win32.Registry.LocalMachine })
+            using (var clients = hive.OpenSubKey(@"SOFTWARE\Clients\StartMenuInternet"))
+            {
+                if (clients == null) continue;
+                foreach (string name in clients.GetSubKeyNames())
+                    using (var urls = clients.OpenSubKey(name + @"\Capabilities\URLAssociations"))
+                    using (var client = clients.OpenSubKey(name))
+                    using (var open = clients.OpenSubKey(name + @"\shell\open\command"))
+                    {
+                        if (urls == null || !string.Equals(urls.GetValue("https") as string, id, StringComparison.OrdinalIgnoreCase)) continue;
+                        string label = (client.GetValue("") as string) ?? name;
+                        string command = open == null ? null : open.GetValue("") as string;
+                        string exe = command == null ? null : command.Trim().StartsWith("\"") ? command.Trim().Substring(1).Split('"')[0] : command.Split(' ')[0];
+                        return new[] { label, exe != null && File.Exists(exe) ? exe : null };
+                    }
+            }
+        return null;
+    }
+
+    // Whether Browser Switch is the default browser can change while the window is open - in
+    // Settings, or by another browser asking to be the default. Checked whenever the window comes
+    // to the front: the yellow strip and the top line follow.
+    void CheckDefault()
+    {
+        if (setup != null && setup.Visible) return;
+        if (warning != null) warning.Visible = !IsDefaultBrowser;
+        ShowHeader();
+    }
+
     Control NotDefaultWarning()
     {
-        var strip = new Panel { Dock = DockStyle.Top, Height = 0, BackColor = Color.FromArgb(255, 244, 206) };
-        if (IsDefaultBrowser) return strip;
-
-        strip.Height = 46;
+        var strip = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = Color.FromArgb(255, 244, 206), Visible = !IsDefaultBrowser };
         strip.Padding = new Padding(10, 8, 12, 8);
         var say = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         say.Controls.Add(new Label { AutoSize = true, ForeColor = Color.FromArgb(90, 60, 0), Font = new Font(Font, FontStyle.Bold),
                                      Margin = new Padding(3, 6, 0, 0),
-                                     Text = "⚠  Not switched on yet - links still go to your old browser" });
+                                     Text = "⚠  Not switched on yet - links do not pass through Browser Switch" });
         say.Controls.Add(new HelpMark(
             "Windows sends every link to your default browser, and only you can change that - no program is " +
             "allowed to. Until Browser Switch is the default for HTTP and HTTPS, nothing in this window has any " +
             "effect.\nThe button opens the right page in Settings.") { Margin = new Padding(6, 7, 0, 0) });
-        var open = new Button { Dock = DockStyle.Right, Width = 170, Text = "Fix this in Settings", AutoSize = false };
-        open.Click += delegate {
-            // Windows 11 can open straight at one app's page, which saves hunting through the list.
-            // The name here has to be the value name under RegisteredApplications - "BrowserSwitch",
-            // no space. The display name "Browser Switch" matches nothing and lands on a blank page.
-            // If that form of the link is not understood, the plain Default apps page still opens.
-            try { System.Diagnostics.Process.Start("ms-settings:defaultapps?registeredAppUser=BrowserSwitch"); }
-            catch { try { System.Diagnostics.Process.Start("ms-settings:defaultapps"); } catch { } }
-        };
+        var open = new Button { Dock = DockStyle.Right, Width = 170, Text = "Set it up", AutoSize = false };
+        open.Click += delegate { ShowSetup(); };
         strip.Controls.Add(say);
         strip.Controls.Add(open);
         return strip;
@@ -221,6 +253,41 @@ class SwitchForm : Form
     public int BrowserCount { get { return browserTree.Nodes.Count; } }
     public int ProfileCount { get { int n = 0; foreach (TreeNode t in browserTree.Nodes) n += t.Nodes.Count; return n; } }
     public int SwitchButtonCount { get { return switchRow.Controls.OfType<Button>().Count(); } }
+    public string TabNames { get { return string.Join(", ", tabs.TabPages.Cast<TabPage>().Select(p => p.Text)); } }
+
+    // Opens a tab by its name ("Rules", "Shortcuts"...) - for the dock menu and the tests.
+    public void ShowTabNamed(string name)
+    {
+        foreach (TabPage p in tabs.TabPages)
+            if (p.Text.StartsWith(name, StringComparison.OrdinalIgnoreCase)) { tabs.SelectedTab = p; ShowTab(); return; }
+    }
+
+    // A tab's contents are built fresh each time it is opened, so they always show the categories as
+    // they are now - one added a moment ago on the Categories tab included.
+    void ShowTab()
+    {
+        PauseKeys(tabs.SelectedTab == shortcutsPage);
+        if (tabs.SelectedTab == rulesPage) Fill(rulesPage, new RulesPage(() => { Save(); Reload(); }));
+        else if (tabs.SelectedTab == shortcutsPage) Fill(shortcutsPage, new ShortcutsPage(ShortcutFree, () => { Save(); Reload(); }));
+        else if (tabs.SelectedTab == cleaningPage) Fill(cleaningPage, new CleaningPage(Save));
+        else if (tabs.SelectedTab == logPage) Fill(logPage, new LogPage(Save));
+        else if (tabs.SelectedTab == aboutPage) Fill(aboutPage, new AboutPage(Save, ShowSetup));
+    }
+
+    static void Fill(TabPage page, Control content)
+    {
+        foreach (var old in page.Controls.Cast<Control>().ToList()) old.Dispose();
+        page.Controls.Add(content);
+    }
+
+    // While the Shortcuts tab is open the dock lets go of its keys, so pressing one records it here
+    // instead of switching.
+    void PauseKeys(bool pause)
+    {
+        if (pause == keysPaused) return;
+        keysPaused = pause;
+        if (PauseShortcuts != null) PauseShortcuts(pause);
+    }
     public string HeaderText { get { return (caption.Text + " " + header.Text).Trim(); } }
 
     static Button Button_(string text, EventHandler onClick)
@@ -232,24 +299,67 @@ class SwitchForm : Form
 
     // ---- filling in -----------------------------------------------------------------------------
 
+    // Every browser with its own icon, in bold; under it its profiles, each with the profile's
+    // picture where the browser keeps one (Brave, Chrome, Edge).
     void FillBrowsers()
     {
         browserTree.BeginUpdate();
         browserTree.Nodes.Clear();
-        foreach (var b in browsers)
-        {
-            var node = new TreeNode(b.Name) { Tag = b };
-            foreach (var p in b.Profiles) node.Nodes.Add(new TreeNode(p.Name) { Tag = new object[] { b, p } });
-            browserTree.Nodes.Add(node);
-            node.Expand();
-        }
+        treeIcons.Images.Clear();
+        using (var bold = new Font(Font, FontStyle.Bold))
+            foreach (var b in browsers)
+            {
+                string own = TreeIcon(b.Exe, null);
+                var node = new TreeNode(b.Name) { Tag = b, NodeFont = new Font(bold, FontStyle.Bold), ImageKey = own, SelectedImageKey = own };
+                foreach (var p in b.Profiles)
+                {
+                    string pic = TreeIcon(b.Exe, p.Args) ?? own;
+                    var child = new TreeNode(p.Name) { Tag = new object[] { b, p }, ImageKey = pic, SelectedImageKey = pic };
+                    if (p.Args.Length == 0) child.ForeColor = SystemColors.GrayText;   // "(as it opens normally)"
+                    node.Nodes.Add(child);
+                }
+                browserTree.Nodes.Add(node);
+                node.Expand();
+            }
         browserTree.EndUpdate();
         if (browsers.Count == 0)
             browserTree.Nodes.Add(new TreeNode("No browsers found - is anything installed?"));
+        MarkUsedProfiles();
+    }
+
+    // The browser's icon, or the profile's own picture; its key in the list, or null if there is none.
+    string TreeIcon(string exe, string args)
+    {
+        string file = args == null ? exe : Machine.ProfileIcon(exe, args);
+        if (file == null || !File.Exists(file)) return null;
+        if (treeIcons.Images.ContainsKey(file)) return file;
+        try
+        {
+            using (var icon = file.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) ? new Icon(file, 32, 32) : Icon.ExtractAssociatedIcon(file))
+                treeIcons.Images.Add(file, icon.ToBitmap());
+            return file;
+        }
+        catch { return null; }
+    }
+
+    // After a profile's name: which categories use it - "Work (Profile 2)   ←  Work".
+    void MarkUsedProfiles()
+    {
+        foreach (TreeNode b in browserTree.Nodes)
+            foreach (TreeNode n in b.Nodes)
+            {
+                var pair = n.Tag as object[]; if (pair == null) continue;
+                var br = (Browser)pair[0]; var p = (Profile)pair[1];
+                var users = Config.Categories.Where(c => string.Equals(c.Exe, br.Exe, StringComparison.OrdinalIgnoreCase) && c.Args == p.Args)
+                                             .Select(c => c.Name).ToList();
+                string text = p.Name + (users.Count > 0 ? "     ←  " + string.Join(", ", users) : "");
+                if (n.Text != text) n.Text = text;
+            }
     }
 
     public void Reload()
     {
+        if (browserTree != null) MarkUsedProfiles();
         string keep = Selected() != null ? Selected().Name : null;
 
         categoryList.BeginUpdate();
@@ -268,10 +378,11 @@ class SwitchForm : Form
         foreach (var old in switchRow.Controls.Cast<Control>().ToList()) old.Dispose();
         if (Config.Categories.Count > 0)
         {
-            switchRow.Controls.Add(new Label { Text = "Switch to:", AutoSize = true, Margin = new Padding(3, 9, 0, 0) });
+            // the "?" in front, so the label stays next to the buttons it names
             switchRow.Controls.Add(new HelpMark("Click a category to make it live: from then on links open in its browser. " +
                 "While rules are on, a link that matches a rule still goes where the rule says.")
-                { Margin = new Padding(5, 10, 8, 0) });
+                { Margin = new Padding(3, 10, 6, 0) });
+            switchRow.Controls.Add(new Label { Text = "Switch to:", AutoSize = true, Margin = new Padding(0, 9, 8, 0) });
         }
         foreach (var c in Config.Categories)
         {
@@ -286,7 +397,7 @@ class SwitchForm : Form
             switchRow.Controls.Add(b);
         }
         int rules = Config.Rules.Count(r => r.On);
-        rulesButton.Text = Config.RulesOn && rules > 0 ? "Rules (" + rules + ")…" : "Rules…";
+        rulesPage.Text = Config.RulesOn && rules > 0 ? "Rules (" + rules + ")" : "Rules";
         UpdateButtons();
     }
 
@@ -294,15 +405,22 @@ class SwitchForm : Form
     // are in use), or the original browser.
     void ShowHeader()
     {
-        filling = true;
         int ticked = Config.Rules.Count(r => r.On);
-        useRules.Checked = Config.RulesOn;
-        rulesCount.Text = ticked == 0 ? "(no rules ticked yet)" : ticked == 1 ? "(1 rule)" : "(" + ticked + " rules)";
-        filling = false;
-
         var live = Config.Current();
         var shown = live;
         bool rulesInUse = Config.RulesOn && ticked > 0;
+        if (!IsDefaultBrowser)
+        {
+            // Windows sends links straight to the default browser - Browser Switch never sees them
+            string[] other = CurrentDefault();
+            caption.Text = "Browser Switch is not your default browser - links go straight to:";
+            header.Text = other != null ? other[0] : "your default browser";
+            var old = headerIcon.Image;
+            headerIcon.Image = null;
+            if (other != null && other[1] != null) try { using (var icon = Icon.ExtractAssociatedIcon(other[1])) headerIcon.Image = icon.ToBitmap(); } catch { }
+            if (old != null) old.Dispose();
+            return;
+        }
         if (live != null)
         {
             caption.Text = rulesInUse ? "Links open in (unless a rule says otherwise):" : "Links open in:";
@@ -403,19 +521,6 @@ class SwitchForm : Form
 
     void Save() { Config.Save(); if (Saved != null) Saved(); }
 
-    void EditRules()
-    {
-        using (var d = new RulesDialog(Save)) d.ShowDialog(this);
-        Reload();
-    }
-
-    void EditShortcuts()
-    {
-        if (PauseShortcuts != null) PauseShortcuts(true);
-        try { using (var d = new ShortcutsDialog(ShortcutFree, Save)) d.ShowDialog(this); }
-        finally { if (PauseShortcuts != null) PauseShortcuts(false); }
-        Reload();
-    }
 
     void SetInDock(bool on)
     {
@@ -531,6 +636,7 @@ class SwitchForm : Form
             var no = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 276, Top = 80, Width = 78 };
             dlg.Controls.AddRange(new Control[] { label, box, ok, no });
             dlg.AcceptButton = ok; dlg.CancelButton = no;
+            Ui.HandCursors(dlg);
             box.SelectAll();
             return dlg.ShowDialog(this) == DialogResult.OK ? box.Text : null;
         }
@@ -591,6 +697,7 @@ class IconEditor : Form
         CancelButton = cancel;
         Controls.Add(table);
         ShowPreview();
+        Ui.HandCursors(this);
     }
 
     TrackBar Slider(TableLayoutPanel table, int row, string name, int min, int max, int value, int tick)
@@ -616,5 +723,52 @@ class IconEditor : Form
             if (oldBig != null) oldBig.Dispose();
             if (oldActual != null) oldActual.Dispose();
         }
+    }
+}
+
+// The browsers and profiles list. Windows draws the small open / close arrow at a fixed size, which
+// is hard to hit, so the whole row of a browser does the same: one click anywhere on it - its name,
+// its icon, the space after - opens or closes its profiles. The arrows are drawn in the modern style
+// File Explorer uses.
+class BrowserTree : TreeView
+{
+    [System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern int SetWindowTheme(IntPtr window, string app, string idList);
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        try { SetWindowTheme(Handle, "explorer", null); } catch { }
+    }
+
+    protected override void OnNodeMouseClick(TreeNodeMouseClickEventArgs e)
+    {
+        base.OnNodeMouseClick(e);
+        // a click on the arrow itself is handled by Windows already
+        if (e.Button == MouseButtons.Left && e.Node.Level == 0 && HitTest(e.Location).Location != TreeViewHitTestLocations.PlusMinus)
+            e.Node.Toggle();
+    }
+
+    // Windows also opens or closes a row on a double-click; on a browser's row that would undo the
+    // click just made, so a second quick click there counts as one more click. On a profile a
+    // double-click stays what it was: use this profile.
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_LBUTTONDBLCLK = 0x0203;
+        if (m.Msg == WM_LBUTTONDBLCLK)
+        {
+            var at = new Point((short)(m.LParam.ToInt64() & 0xFFFF), (short)((m.LParam.ToInt64() >> 16) & 0xFFFF));
+            var hit = HitTest(at);
+            if (hit.Node != null && hit.Node.Level == 0) { hit.Node.Toggle(); return; }
+        }
+        base.WndProc(ref m);
+    }
+
+    // the hand over a browser's row, since the whole row can be clicked
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        var node = GetNodeAt(e.Location);
+        Cursor = node != null && node.Level == 0 ? Cursors.Hand : Cursors.Default;
     }
 }

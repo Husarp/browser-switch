@@ -6,6 +6,10 @@
 #
 # Everything is written under HKEY_CURRENT_USER, so no administrator rights are needed and nothing
 # is touched for other accounts on this computer. uninstall.ps1 removes every key this creates.
+#
+# -Quiet: say nothing at the end and start nothing - for get.ps1, which does both itself.
+
+param([switch]$Quiet)
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -204,14 +208,11 @@ if (-not (Test-Path $config)) {
   $lines -join "`r`n" | Set-Content $config -Encoding UTF8
 }
 
+if ($Quiet) { return }
 Write-Host ''
 Write-Host 'Browser Switch is registered.' -ForegroundColor Green
 Write-Host ''
-Write-Host 'One step left, and it has to be you - Windows does not let a script do it:'
-Write-Host '  1. Open Settings > Apps > Default apps'
-Write-Host '  2. Find "Browser Switch" and set it as the default for HTTP and HTTPS'
-Write-Host ''
-Write-Host 'Then double-click "Switch browser" on your Desktop. The window lists every browser on this'
-Write-Host 'computer with its profiles; make the categories you want and point each one at a profile.'
-Write-Host 'Until you do, links keep going where they go today.'
-Write-Host 'To undo everything: run uninstall.ps1'
+Write-Host 'It opens now and walks you through the one step left - choosing it as your default browser,'
+Write-Host 'which Windows lets only you do. Until then, links keep going where they go today.'
+Write-Host 'To remove it: Settings > Apps > Installed apps > Browser Switch.'
+Start-Process $exe

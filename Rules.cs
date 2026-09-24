@@ -215,9 +215,9 @@ static class AppCatalog
     }
 }
 
-// The rules list: tick a rule on or off, move it up or down (the first match decides), change where
-// it sends links, add apps or addresses. Every change is saved at once.
-class RulesDialog : Form
+// The Rules tab of the main window: tick a rule on or off, move it up or down (the first match
+// decides), change where it sends links, add apps or addresses. Every change is saved at once.
+class RulesPage : UserControl
 {
     readonly Action save;
     readonly ListView list = new ListView { View = View.Details, CheckBoxes = true, FullRowSelect = true, HideSelection = false,
@@ -229,15 +229,12 @@ class RulesDialog : Form
 
     static bool Same(string a, string b) { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
 
-    public RulesDialog(Action save)
+    public RulesPage(Action save)
     {
         this.save = save;
-        Text = "Link rules";
         Font = new Font("Segoe UI", 9F);
-        Size = new Size(660, 470);
-        MinimumSize = new Size(540, 360);
-        StartPosition = FormStartPosition.CenterParent;
-        ShowInTaskbar = false; MinimizeBox = false; MaximizeBox = false;
+        Dock = DockStyle.Fill;
+        Padding = new Padding(4);
 
         var use = new CheckBox { Text = "Use rules", Checked = Config.RulesOn, AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
         use.CheckedChanged += delegate { Config.RulesOn = use.Checked; save(); };
@@ -246,7 +243,7 @@ class RulesDialog : Form
         top.Controls.Add(new HelpMark("A link that matches a rule goes to that rule's category, whatever is live. " +
             "The first rule that matches decides - use Move up / Move down. A link that matches none goes to the live " +
             "category.\nUntick a rule to keep it but not use it; untick Use rules for all of them - also in the " +
-            "main window, the dock's right-click menu, and on a keyboard shortcut."));
+            "dock's right-click menu, and on a keyboard shortcut."));
 
         list.Columns.Add("When a link…", 270);
         list.Columns.Add("goes to", -2);                   // -2: fills the rest of the width
@@ -266,7 +263,7 @@ class RulesDialog : Form
         why.Controls.Add(new HelpMark("Apps are recognised by their program file - the list has the usual ones. " +
             "A few apps, mostly from the Microsoft Store, hand links over through a Windows go-between; a rule for " +
             "such an app cannot see it, so use an address rule for those.\n\"Opened links lately\" in the app list shows " +
-            "what really opened your links.") { Size = new Size(15, 15), Margin = new Padding(3, 1, 0, 0) });
+            "what really opened your links.") { Size = new Size(17, 17), Margin = new Padding(4, 0, 0, 0) });
         side.Controls.Add(why);
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42, Padding = new Padding(8, 6, 8, 4) };
@@ -281,9 +278,6 @@ class RulesDialog : Form
             Fill();
         };
         bottom.Controls.Add(goesTo);
-        var done = new Button { Text = "Done", DialogResult = DialogResult.OK, AutoSize = true, Margin = new Padding(40, 3, 3, 3) };
-        bottom.Controls.Add(done);
-        CancelButton = done;
 
         Controls.Add(list);
         Controls.Add(side);
@@ -356,7 +350,7 @@ class RulesDialog : Form
     {
         using (var picker = new AppPicker())
         {
-            if (picker.ShowDialog(this) != DialogResult.OK) return;
+            if (picker.ShowDialog(FindForm()) != DialogResult.OK) return;
             foreach (var a in picker.Chosen)
                 if (!Config.Rules.Any(r => r.ByApp && Same(r.Match, a.Exes)))
                     Config.Rules.Add(new Rule { ByApp = true, Label = a.Name, Match = a.Exes, Category = picker.Target });
@@ -384,7 +378,8 @@ class RulesDialog : Form
             var no = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 324, Top = 130, Width = 80 };
             d.Controls.AddRange(new Control[] { ask, box, hint, to, cat, ok, no });
             d.AcceptButton = ok; d.CancelButton = no;
-            if (d.ShowDialog(this) != DialogResult.OK || cat.SelectedItem == null) return;
+            Ui.HandCursors(d);
+            if (d.ShowDialog(FindForm()) != DialogResult.OK || cat.SelectedItem == null) return;
             string address = Router.CleanAddress(box.Text);
             if (address.Length == 0) return;
             Config.Rules.Add(new Rule { ByApp = false, Label = address, Match = address, Category = (string)cat.SelectedItem });
@@ -479,6 +474,7 @@ class AppPicker : Form
         Controls.Add(groups);
         Controls.Add(searchRow);
         Controls.Add(bottom);
+        Ui.HandCursors(this);
         Fill();
     }
 

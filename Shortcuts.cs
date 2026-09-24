@@ -168,9 +168,10 @@ class KeyBox : TextBox
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData) { return false; }
 }
 
-// The "Keyboard shortcuts" window: click a box, press the keys; Clear empties one. Every change is
-// saved at once; each line says whether its shortcut is ready, or what is wrong with it.
-class ShortcutsDialog : Form
+// The Shortcuts tab of the main window: click a box, press the keys; Clear empties one. Every change
+// is saved at once; each line says whether its shortcut is ready, or what is wrong with it. While
+// this tab is open the dock lets go of its shortcuts, so pressing one records it instead of switching.
+class ShortcutsPage : UserControl
 {
     class Line
     {
@@ -183,21 +184,17 @@ class ShortcutsDialog : Form
     readonly Func<string, bool> isFree;   // null when the dock is not running to ask
     readonly Action save;
 
-    public ShortcutsDialog(Func<string, bool> isFree, Action save)
+    public ShortcutsPage(Func<string, bool> isFree, Action save)
     {
         this.isFree = isFree;
         this.save = save;
-        Text = "Keyboard shortcuts";
         Font = new Font("Segoe UI", 9F);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MinimizeBox = false; MaximizeBox = false; ShowInTaskbar = false;
-        StartPosition = FormStartPosition.CenterParent;
-        AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        Padding = new Padding(12);
+        Dock = DockStyle.Fill;
+        AutoScroll = true;      // a long list of categories scrolls rather than being cut off
 
         // name | keys | Clear | Reset | in next/previous | status. The Reset column keeps its width
         // while empty, so a Reset button appearing does not shift everything sideways.
-        var table = new TableLayoutPanel { ColumnCount = 6, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill };
+        var table = new TableLayoutPanel { ColumnCount = 6, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Location = new Point(12, 12) };
         for (int i = 0; i < 6; i++)
             table.ColumnStyles.Add(i == 3 ? new ColumnStyle(SizeType.Absolute, 64) : new ColumnStyle(SizeType.AutoSize));
         int row = 0;
@@ -243,12 +240,6 @@ class ShortcutsDialog : Form
                 () => Config.PrevOn, v => Config.PrevOn = v);
         AddLine(table, row++, "Rules on / off", () => Config.RulesKey, v => Config.RulesKey = v, () => Config.RulesDefault, null,
                 () => Config.RulesKeyOn, v => Config.RulesKeyOn = v);
-
-        // Enter and Esc do not close this window: while a box is being recorded they are keys like
-        // any other. Done closes it.
-        var done = new Button { Text = "Done", DialogResult = DialogResult.OK, AutoSize = true, Anchor = AnchorStyles.Right,
-                                Margin = new Padding(3, 12, 3, 0) };
-        table.Controls.Add(done, 5, row);
         Controls.Add(table);
         UpdateLines();
     }
