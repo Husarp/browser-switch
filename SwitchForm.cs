@@ -1,9 +1,10 @@
 ﻿// The window you get when you click Browser Switch.
 //
-// Top    - what links open in right now.
+// Top    - what links open in right now, and the switch for all rules.
 // Left   - your categories, and what each one points at.
 // Right  - every browser on this machine, with its profiles underneath.
-// Bottom - one button per category. Click it and links go there from that moment on.
+// Bottom - one button per category (click it and links go there from that moment on), Rules…
+//          and Shortcuts…. Explanations sit behind the small "?" marks (Ui.cs).
 
 using System;
 using System.Collections.Generic;
@@ -15,13 +16,17 @@ using System.Windows.Forms;
 class SwitchForm : Form
 {
     readonly List<Browser> browsers = Machine.Browsers();
-    Label header;
+    readonly ToolTip hints = new ToolTip();
+    Label header, caption;
+    PictureBox headerIcon;
+    CheckBox useRules;
+    Label rulesCount;
     ListBox categoryList;
     TreeView browserTree;
-    Button assign, rename, remove, iconButton;
+    Button assign, rename, remove, iconButton, rulesButton;
     CheckBox inDock;
     PictureBox iconPreview;
-    bool filling;              // true while the dock controls are being set to match the selection
+    bool filling;              // true while controls are being set to match the settings, not by you
     FlowLayoutPanel switchRow;
 
     // The dock listens for this, so a change made here shows up there at once.
@@ -36,80 +41,125 @@ class SwitchForm : Form
         Text = "Browser Switch";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         ShowInTaskbar = false;     // it lives in the dock; closing it hides it back there
-        Size = new Size(720, 520);
-        MinimumSize = new Size(600, 420);
+        Size = new Size(760, 580);
+        MinimumSize = new Size(640, 460);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9F);
-
-        header = new Label { Dock = DockStyle.Top, Height = 46, Padding = new Padding(14, 12, 14, 0),
-                             Font = new Font("Segoe UI", 11F, FontStyle.Bold) };
 
         // Minimum sizes and the splitter position are set further down, once this is inside the form.
         // A SplitContainer is 150px wide until it is docked, and setting them here throws.
         var split = new SplitContainer { Dock = DockStyle.Fill };
+        split.Panel1.Padding = new Padding(10, 6, 6, 8);
+        split.Panel2.Padding = new Padding(6, 6, 10, 8);
 
         // ---- left: the categories ----
-        categoryList = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
+        categoryList = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 42 };
+        categoryList.DrawItem += DrawRow;
         categoryList.SelectedIndexChanged += delegate { UpdateButtons(); };
         categoryList.DoubleClick += delegate { SwitchTo(Selected()); };
 
-        var leftButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(4) };
+        var leftButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(0, 4, 0, 0) };
         var add = Button_("New category", delegate { NewCategory(); });
         rename = Button_("Rename", delegate { RenameCategory(); });
         remove = Button_("Delete", delegate { DeleteCategory(); });
         leftButtons.Controls.AddRange(new Control[] { add, rename, remove });
 
         // pin the selected category to the dock, and choose the icon it shows there
-        inDock = new CheckBox { Text = "Show in dock", AutoSize = true, Padding = new Padding(2, 5, 0, 0) };
+        inDock = new CheckBox { Text = "Show in dock", AutoSize = true, Margin = new Padding(3, 7, 3, 3) };
         inDock.CheckedChanged += delegate { if (!filling) SetInDock(inDock.Checked); };
         iconButton = Button_("Dock icon…", delegate { PickIcon(); });
         iconPreview = new PictureBox { Size = new Size(24, 24), SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(6, 5, 0, 0) };
-        var dockRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(4), WrapContents = false };
-        dockRow.Controls.AddRange(new Control[] { inDock, iconButton, iconPreview });
+        var dockHelp = new HelpMark("Show in dock puts this category's own icon next to the clock. One click on that icon " +
+                                    "switches to it - no window needed.\nDock icon… chooses what the icon looks like: the " +
+                                    "browser's own icon, that icon recoloured, a colour with a letter, or an image file.")
+                       { Margin = new Padding(8, 8, 0, 0) };
+        var dockRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(0, 2, 0, 0), WrapContents = false };
+        dockRow.Controls.AddRange(new Control[] { inDock, iconButton, iconPreview, dockHelp });
 
-        var leftHead = new Label { Dock = DockStyle.Top, Height = 24, Text = "  Categories", Padding = new Padding(4, 5, 0, 0),
-                                   Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
         split.Panel1.Controls.Add(categoryList);
-        split.Panel1.Controls.Add(leftHead);
+        split.Panel1.Controls.Add(Ui.Section("Categories",
+            "A category is a name - Work, Home, School - with a browser and profile. Links open in the live one, " +
+            "marked LIVE.\nTo set one up: select it here, pick a profile on the right, press Use this.\n" +
+            "Double-click a category to make it live."));
         split.Panel1.Controls.Add(leftButtons);
         split.Panel1.Controls.Add(dockRow);
 
         // ---- right: browsers and their profiles ----
-        browserTree = new TreeView { Dock = DockStyle.Fill, HideSelection = false, ShowLines = true };
+        browserTree = new TreeView { Dock = DockStyle.Fill, HideSelection = false, ShowLines = true, ItemHeight = 22 };
         browserTree.AfterSelect += delegate { UpdateButtons(); };
         browserTree.DoubleClick += delegate { Assign(); };
 
         assign = Button_("Use this for the selected category", delegate { Assign(); });
-        assign.AutoSize = true;
-        var rightButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(4) };
+        var rightButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(0, 4, 0, 0) };
         rightButtons.Controls.Add(assign);
 
-        var rightHead = new Label { Dock = DockStyle.Top, Height = 24, Text = "  Browsers on this computer",
-                                    Padding = new Padding(4, 5, 0, 0), Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
         split.Panel2.Controls.Add(browserTree);
-        split.Panel2.Controls.Add(rightHead);
+        split.Panel2.Controls.Add(Ui.Section("Browsers and profiles",
+            "Every browser on this computer, with its profiles underneath - read from the browsers themselves, " +
+            "so the names are the ones you gave them.\nSelect a profile, then Use this - or double-click it."));
         split.Panel2.Controls.Add(rightButtons);
 
-        // ---- bottom: one button per category ----
-        switchRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 52, Padding = new Padding(10, 9, 10, 9),
-                                          BackColor = SystemColors.ControlLight, WrapContents = false, AutoScroll = true };
+        // ---- bottom: one button per category, and the extra settings ----
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 54, BackColor = Ui.Bar };
+        switchRow = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(10, 10, 4, 8), WrapContents = false, AutoScroll = true };
+        var extras = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, Padding = new Padding(4, 10, 10, 8), WrapContents = false };
+        rulesButton = Button_("Rules…", delegate { EditRules(); });
+        rulesButton.Height = 32;
+        hints.SetToolTip(rulesButton, "Send links from chosen apps or websites to a chosen category");
+        extras.Controls.Add(rulesButton);
+        var keysButton = Button_("Shortcuts…", delegate { EditShortcuts(); });
+        keysButton.Height = 32;
+        hints.SetToolTip(keysButton, "Keyboard shortcuts for switching");
+        extras.Controls.Add(keysButton);
+        bottom.Controls.Add(switchRow);
+        bottom.Controls.Add(extras);
 
         Controls.Add(split);
-        Controls.Add(header);
+        Controls.Add(Header());
         Controls.Add(NotDefaultWarning());
-        Controls.Add(switchRow);
+        Controls.Add(bottom);
 
         // now that it has a real width, the panels can be given their limits
         if (split.Width > 480)
         {
-            split.Panel1MinSize = 200;
+            split.Panel1MinSize = 220;
             split.Panel2MinSize = 240;
-            split.SplitterDistance = Math.Min(300, split.Width - 260);
+            split.SplitterDistance = Math.Min(340, split.Width - 260);
         }
 
         FillBrowsers();
         Reload();
     }
+
+    // The top: where links go right now, and the switch for all rules.
+    Control Header()
+    {
+        var panel = new Panel { Dock = DockStyle.Top, Height = 96, BackColor = SystemColors.Window };
+        headerIcon = new PictureBox { Left = 16, Top = 14, Size = new Size(32, 32), SizeMode = PictureBoxSizeMode.Zoom };
+        caption = new Label { Left = 58, Top = 9, AutoSize = true, ForeColor = SystemColors.GrayText };
+        header = new Label { Left = 58, Top = 26, AutoSize = true, Font = new Font("Segoe UI", 12F, FontStyle.Bold) };
+
+        useRules = new CheckBox { Text = "Use rules", AutoSize = true, Margin = new Padding(3, 5, 3, 3) };
+        useRules.CheckedChanged += delegate { if (filling) return; Config.RulesOn = useRules.Checked; Save(); Reload(); };
+        rulesCount = new Label { AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0, 6, 0, 0) };
+        var row = new FlowLayoutPanel { Left = 12, Top = 58, AutoSize = true, WrapContents = false };
+        row.Controls.Add(useRules);
+        row.Controls.Add(rulesCount);
+        row.Controls.Add(new HelpMark(
+            "One switch for all your link rules. Off: every link simply opens in the live category - switch " +
+            "category and links follow. On: a link that matches a rule goes where the rule says.\n" +
+            "Also in the dock's right-click menu, and on a keyboard shortcut (see Shortcuts…). " +
+            "Rules… sets up the rules themselves.")
+            { Margin = new Padding(6, 6, 0, 0) });
+
+        panel.Controls.Add(headerIcon);
+        panel.Controls.Add(caption);
+        panel.Controls.Add(header);
+        panel.Controls.Add(row);
+        panel.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = SystemColors.ControlLight });
+        return panel;
+    }
+
 
     // Everything in this window is ignored by Windows until Browser Switch is the default browser,
     // and that has to be set by hand in Settings. Without saying so, the whole thing just looks
@@ -142,14 +192,16 @@ class SwitchForm : Form
         var strip = new Panel { Dock = DockStyle.Top, Height = 0, BackColor = Color.FromArgb(255, 244, 206) };
         if (IsDefaultBrowser) return strip;
 
-        strip.Height = 76;
-        strip.Padding = new Padding(14, 8, 14, 8);
-        var text = new Label {
-            Dock = DockStyle.Fill, ForeColor = Color.FromArgb(90, 60, 0), AutoSize = false,
-            Text = "NOT SWITCHED ON. Windows is still sending every link to your old browser, so nothing\r\n" +
-                   "below has any effect. Set “Browser Switch” as the default for HTTP and HTTPS.\r\n" +
-                   "Windows only accepts that from you — no program is allowed to do it.",
-        };
+        strip.Height = 46;
+        strip.Padding = new Padding(10, 8, 12, 8);
+        var say = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        say.Controls.Add(new Label { AutoSize = true, ForeColor = Color.FromArgb(90, 60, 0), Font = new Font(Font, FontStyle.Bold),
+                                     Margin = new Padding(3, 6, 0, 0),
+                                     Text = "⚠  Not switched on yet - links still go to your old browser" });
+        say.Controls.Add(new HelpMark(
+            "Windows sends every link to your default browser, and only you can change that - no program is " +
+            "allowed to. Until Browser Switch is the default for HTTP and HTTPS, nothing in this window has any " +
+            "effect.\nThe button opens the right page in Settings.") { Margin = new Padding(6, 7, 0, 0) });
         var open = new Button { Dock = DockStyle.Right, Width = 170, Text = "Fix this in Settings", AutoSize = false };
         open.Click += delegate {
             // Windows 11 can open straight at one app's page, which saves hunting through the list.
@@ -159,7 +211,7 @@ class SwitchForm : Form
             try { System.Diagnostics.Process.Start("ms-settings:defaultapps?registeredAppUser=BrowserSwitch"); }
             catch { try { System.Diagnostics.Process.Start("ms-settings:defaultapps"); } catch { } }
         };
-        strip.Controls.Add(text);
+        strip.Controls.Add(say);
         strip.Controls.Add(open);
         return strip;
     }
@@ -168,8 +220,8 @@ class SwitchForm : Form
     public int CategoryCount { get { return categoryList.Items.Count; } }
     public int BrowserCount { get { return browserTree.Nodes.Count; } }
     public int ProfileCount { get { int n = 0; foreach (TreeNode t in browserTree.Nodes) n += t.Nodes.Count; return n; } }
-    public int SwitchButtonCount { get { return switchRow.Controls.OfType<Button>().Count(b => b.Name != "shortcuts"); } }
-    public string HeaderText { get { return header.Text; } }
+    public int SwitchButtonCount { get { return switchRow.Controls.OfType<Button>().Count(); } }
+    public string HeaderText { get { return (caption.Text + " " + header.Text).Trim(); } }
 
     static Button Button_(string text, EventHandler onClick)
     {
@@ -201,6 +253,7 @@ class SwitchForm : Form
         string keep = Selected() != null ? Selected().Name : null;
 
         categoryList.BeginUpdate();
+        foreach (Row old in categoryList.Items) old.Dispose();
         categoryList.Items.Clear();
         foreach (var c in Config.Categories)
             categoryList.Items.Add(new Row(c, string.Equals(c.Name, Config.Active, StringComparison.OrdinalIgnoreCase)));
@@ -210,14 +263,16 @@ class SwitchForm : Form
             if (((Row)categoryList.Items[i]).Cat.Name == keep) categoryList.SelectedIndex = i;
         if (categoryList.SelectedIndex < 0 && categoryList.Items.Count > 0) categoryList.SelectedIndex = 0;
 
-        var live = Config.Current();
-        header.Text = live == null
-            ? "Nothing set up yet - make a category, then pick a browser for it"
-            : "Links open in:   " + Config.Active + "   →   " + live.Shows;
+        ShowHeader();
 
-        switchRow.Controls.Clear();
+        foreach (var old in switchRow.Controls.Cast<Control>().ToList()) old.Dispose();
         if (Config.Categories.Count > 0)
-            switchRow.Controls.Add(new Label { Text = "Switch to:", AutoSize = true, Padding = new Padding(0, 8, 6, 0) });
+        {
+            switchRow.Controls.Add(new Label { Text = "Switch to:", AutoSize = true, Margin = new Padding(3, 9, 0, 0) });
+            switchRow.Controls.Add(new HelpMark("Click a category to make it live: from then on links open in its browser. " +
+                "While rules are on, a link that matches a rule still goes where the rule says.")
+                { Margin = new Padding(5, 10, 8, 0) });
+        }
         foreach (var c in Config.Categories)
         {
             var cat = c;
@@ -230,23 +285,91 @@ class SwitchForm : Form
             b.Click += delegate { SwitchTo(cat); };
             switchRow.Controls.Add(b);
         }
-        var keysButton = new Button { Name = "shortcuts", Text = "Shortcuts…", Height = 32, AutoSize = true,
-                                      Padding = new Padding(10, 0, 10, 0), Margin = new Padding(18, 3, 3, 3) };
-        keysButton.Click += delegate { EditShortcuts(); };
-        switchRow.Controls.Add(keysButton);
+        int rules = Config.Rules.Count(r => r.On);
+        rulesButton.Text = Config.RulesOn && rules > 0 ? "Rules (" + rules + ")…" : "Rules…";
         UpdateButtons();
     }
 
-    // one line in the category list
-    class Row
+    // The top line says where a link goes now: the live category (with a word about rules, if any
+    // are in use), or the original browser.
+    void ShowHeader()
     {
-        public readonly Category Cat; readonly bool live;
-        public Row(Category c, bool isLive) { Cat = c; live = isLive; }
-        public override string ToString()
+        filling = true;
+        int ticked = Config.Rules.Count(r => r.On);
+        useRules.Checked = Config.RulesOn;
+        rulesCount.Text = ticked == 0 ? "(no rules ticked yet)" : ticked == 1 ? "(1 rule)" : "(" + ticked + " rules)";
+        filling = false;
+
+        var live = Config.Current();
+        var shown = live;
+        bool rulesInUse = Config.RulesOn && ticked > 0;
+        if (live != null)
         {
-            return (live ? "●  " : "    ") + Cat.Name + "   —   " + (Cat.Shows.Length > 0 ? Cat.Shows : "(not set)") +
-                   (Config.ShortcutsOn && Cat.KeyOn && Cat.HotKey.Length > 0 ? "      " + Cat.HotKey : "");
+            caption.Text = rulesInUse ? "Links open in (unless a rule says otherwise):" : "Links open in:";
+            header.Text = live.Name + "   →   " + live.Shows;
         }
+        else
+        {
+            caption.Text = Config.Categories.Count == 0 ? "Nothing set up yet" : "No category is live - links open in:";
+            header.Text = Config.Categories.Count == 0 ? "Make a category, then pick a browser for it"
+                                                       : "Your original browser (" + Program.OriginalBrowserName() + ")";
+        }
+        var oldIcon = headerIcon.Image;
+        if (shown != null) using (var icon = Tray.IconFor(shown)) headerIcon.Image = icon.ToBitmap();
+        else headerIcon.Image = null;
+        if (oldIcon != null) oldIcon.Dispose();
+    }
+
+    // one line in the category list: its icon, its name (and LIVE), and what it opens in
+    class Row : IDisposable
+    {
+        public readonly Category Cat; public readonly bool Live; public Bitmap Picture;
+        public Row(Category c, bool isLive)
+        {
+            Cat = c; Live = isLive;
+            try { using (var icon = Tray.IconFor(c)) Picture = icon.ToBitmap(); } catch { }
+        }
+        public string Detail
+        {
+            get
+            {
+                return (Cat.Shows.Length > 0 ? Cat.Shows : "No browser yet - pick one on the right") +
+                       (Config.ShortcutsOn && Cat.KeyOn && Cat.HotKey.Length > 0 ? "     ·     " + Cat.HotKey : "");
+            }
+        }
+        public override string ToString() { return (Live ? "live: " : "") + Cat.Name + " - " + Detail; }   // for screen readers
+        public void Dispose() { if (Picture != null) Picture.Dispose(); }
+    }
+
+    void DrawRow(object sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= categoryList.Items.Count) return;
+        var row = (Row)categoryList.Items[e.Index];
+        var g = e.Graphics;
+        var r = e.Bounds;
+        bool picked = (e.State & DrawItemState.Selected) != 0;
+        using (var bg = new SolidBrush(picked ? Ui.Picked : categoryList.BackColor)) g.FillRectangle(bg, r);
+        if (row.Picture != null) g.DrawImage(row.Picture, r.Left + 8, r.Top + (r.Height - 24) / 2, 24, 24);
+        int x = r.Left + 42;
+        using (var bold = new Font(Font, FontStyle.Bold))
+        {
+            TextRenderer.DrawText(g, row.Cat.Name, bold, new Point(x, r.Top + 4), SystemColors.WindowText, TextFormatFlags.NoPrefix);
+            if (row.Live)
+            {
+                int w = TextRenderer.MeasureText(g, row.Cat.Name, bold, Size.Empty, TextFormatFlags.NoPrefix).Width;
+                using (var small = new Font(Font.FontFamily, 7.5F, FontStyle.Bold))
+                {
+                    var tag = new Rectangle(x + w + 4, r.Top + 6, TextRenderer.MeasureText("LIVE", small).Width + 6, 15);
+                    using (var fill = new SolidBrush(Ui.Accent)) g.FillRectangle(fill, tag);
+                    TextRenderer.DrawText(g, "LIVE", small, tag, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
+            }
+        }
+        TextRenderer.DrawText(g, row.Detail, Font, new Point(x, r.Top + 22),
+                              row.Cat.Exe.Length > 0 ? SystemColors.GrayText : Color.DarkOrange, TextFormatFlags.NoPrefix);
+        if (e.Index < categoryList.Items.Count - 1)
+            using (var line = new Pen(Color.FromArgb(235, 235, 235))) g.DrawLine(line, r.Left + 8, r.Bottom - 1, r.Right - 8, r.Bottom - 1);
+        if ((e.State & DrawItemState.Focus) != 0) e.DrawFocusRectangle();
     }
 
     Category Selected()
@@ -279,6 +402,12 @@ class SwitchForm : Form
     // ---- actions ---------------------------------------------------------------------------------
 
     void Save() { Config.Save(); if (Saved != null) Saved(); }
+
+    void EditRules()
+    {
+        using (var d = new RulesDialog(Save)) d.ShowDialog(this);
+        Reload();
+    }
 
     void EditShortcuts()
     {
@@ -347,6 +476,8 @@ class SwitchForm : Form
         string name = Ask("New name for “" + c.Name + "”", c.Name);
         if (string.IsNullOrWhiteSpace(name)) return;
         if (string.Equals(Config.Active, c.Name, StringComparison.OrdinalIgnoreCase)) Config.Active = name.Trim();
+        foreach (var r in Config.Rules.Where(r => string.Equals(r.Category, c.Name, StringComparison.OrdinalIgnoreCase)))
+            r.Category = name.Trim();      // rules follow the category to its new name
         c.Name = name.Trim();
         Save(); Reload();
     }

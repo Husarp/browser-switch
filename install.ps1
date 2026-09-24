@@ -163,9 +163,11 @@ public static class BsShortcutIdentity
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BrowserSwitch"
 if (-not (Test-Path $uninstallKey)) { New-Item -Path $uninstallKey -Force | Out-Null }
 $uninstallCmd = "`"$PSHOME\powershell.exe`" -NoProfile -ExecutionPolicy Bypass -File `"$here\uninstall.ps1`""
+# The version comes from the exe itself, so it is always the one being installed.
+$info = (Get-Item $exe).VersionInfo
 Set-Key $uninstallKey $name 'DisplayName'
 Set-Key $uninstallKey "$exe,0" 'DisplayIcon'
-Set-Key $uninstallKey '2.7.7' 'DisplayVersion'
+Set-Key $uninstallKey ('{0}.{1}.{2}' -f $info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart) 'DisplayVersion'
 Set-Key $uninstallKey $here 'InstallLocation'
 Set-Key $uninstallKey $uninstallCmd 'UninstallString'
 New-ItemProperty -Path $uninstallKey -Name 'NoModify' -Value 1 -PropertyType DWord -Force | Out-Null

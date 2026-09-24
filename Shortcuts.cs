@@ -201,39 +201,34 @@ class ShortcutsDialog : Form
         for (int i = 0; i < 6; i++)
             table.ColumnStyles.Add(i == 3 ? new ColumnStyle(SizeType.Absolute, 64) : new ColumnStyle(SizeType.AutoSize));
         int row = 0;
-        var intro = new Label { AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(3, 0, 3, 8),
-            Text = "These work anywhere while Browser Switch is in the dock. Click a box and press what you want: " +
-                   "any key, alone or with Ctrl, Alt, Shift or Win - special keys too, like media keys, F13-F24 " +
-                   "and launch keys. Each line says whether its keys are free - another program may have them - " +
-                   "and whether they type something you then could not type while the shortcut is on." };
-        var tip = new Label { AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(3, 0, 3, 12),
-                              ForeColor = SystemColors.GrayText,
-            Text = "A keyboard button that shows nothing here is handled by the keyboard's own software. Give it " +
-                   "a keystroke there - F13 to F24 are ideal, no keyboard has them - for example in Logi Options+, " +
-                   "then press it here." };
-        table.Controls.Add(intro, 0, row);
-        table.SetColumnSpan(intro, 6);
-        row++;
-        table.Controls.Add(tip, 0, row);
-        table.SetColumnSpan(tip, 6);
-        row++;
 
         // off until you turn it on: the suggested keys are filled in, but no key is taken away from
         // any other program before you say so
         var on = new CheckBox { Text = "Turn on keyboard shortcuts", AutoSize = true, Checked = Config.ShortcutsOn,
-                                Font = new Font(Font, FontStyle.Bold), Margin = new Padding(3, 0, 3, 10) };
+                                Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 0, 0, 0) };
         on.CheckedChanged += delegate { Config.ShortcutsOn = on.Checked; save(); UpdateLines(); };
-        table.Controls.Add(on, 0, row);
-        table.SetColumnSpan(on, 6);
+        var top = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(3, 0, 3, 14) };
+        top.Controls.Add(on);
+        top.Controls.Add(new HelpMark("These work anywhere, as long as Browser Switch is in the dock. Suggested keys " +
+            "are filled in already - tick this and they work.\nEach can be changed, switched off on its own, or " +
+            "Reset to its suggestion."));
+        table.Controls.Add(top, 0, row);
+        table.SetColumnSpan(top, 6);
         row++;
 
-        var small = new Font(Font.FontFamily, 8F);
-        table.Controls.Add(new Label { Text = "Active", AutoSize = true, Font = small, ForeColor = SystemColors.GrayText,
-                                       Margin = new Padding(3, 0, 3, 2) }, 0, row);
-        table.Controls.Add(new Label { Text = "Shortcut", AutoSize = true, Font = small, ForeColor = SystemColors.GrayText,
-                                       Margin = new Padding(3, 0, 3, 2) }, 1, row);
-        table.Controls.Add(new Label { Text = "In next / previous", AutoSize = true, Font = small, ForeColor = SystemColors.GrayText,
-                                       Margin = new Padding(8, 0, 8, 2) }, 4, row);
+        table.Controls.Add(Ui.Caption("Active", "Ticked: this shortcut is in use. Unticked: its keys are kept, but " +
+                                      "pressing them does nothing, and other programs can use them again."), 0, row);
+        table.Controls.Add(Ui.Caption("Shortcut", "Click a box and press what you want: any key, alone or with Ctrl, Alt, " +
+            "Shift or Win - media keys, F13-F24 and launch keys too. Clear empties it.\nA keyboard button that shows " +
+            "nothing here is handled by the keyboard's own software. Give it a keystroke there - F13 to F24 are " +
+            "ideal, no keyboard has them - for example in Logi Options+, then press it here."), 1, row);
+        var cycleCaption = Ui.Caption("In next / previous", "Next and Previous step through the ticked categories only. " +
+                                      "A category's own shortcut works either way.");
+        cycleCaption.Margin = new Padding(8, 0, 8, 2);
+        table.Controls.Add(cycleCaption, 4, row);
+        table.Controls.Add(Ui.Caption("Status", "Whether each shortcut will work: ready; taken by another program; used " +
+            "twice here; or types a character - a plain K types k, so while it is a shortcut you could not type k. " +
+            "That is allowed; it is your choice.\nOn Polish and many other keyboards Ctrl+Alt is AltGr: Ctrl+Alt+A types ą."), 5, row);
         row++;
 
         foreach (var c in Config.Categories)
@@ -246,6 +241,8 @@ class ShortcutsDialog : Form
                 () => Config.NextOn, v => Config.NextOn = v);
         AddLine(table, row++, "Previous category", () => Config.PrevKey, v => Config.PrevKey = v, () => Config.PrevDefault, null,
                 () => Config.PrevOn, v => Config.PrevOn = v);
+        AddLine(table, row++, "Rules on / off", () => Config.RulesKey, v => Config.RulesKey = v, () => Config.RulesDefault, null,
+                () => Config.RulesKeyOn, v => Config.RulesKeyOn = v);
 
         // Enter and Esc do not close this window: while a box is being recorded they are keys like
         // any other. Done closes it.
@@ -327,9 +324,9 @@ class ShortcutsDialog : Form
             else if (typed != null) typed = "“" + typed + "”";
             string problem =
                 all.Count(x => string.Equals(x, s, StringComparison.OrdinalIgnoreCase)) > 1 ? "used twice here" :
-                typed != null ? "types " + typed + " - you could not type it while this is on" :
+                typed != null ? "types " + typed :
                 isFree != null && !isFree(s) ? "taken by another program" : null;
-            line.Status.Text = problem != null ? "⚠ " + problem : Config.ShortcutsOn ? "✓ ready" : "ready - turn on above";
+            line.Status.Text = problem != null ? "⚠ " + problem : Config.ShortcutsOn ? "✓ ready" : "ready - tick Turn on";
             line.Status.ForeColor = problem != null ? Color.DarkOrange : Config.ShortcutsOn ? Color.SeaGreen : SystemColors.GrayText;
         }
     }

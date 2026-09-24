@@ -12,7 +12,9 @@
 //   BrowserSwitch.exe                open the window: pick browsers, edit categories, switch
 //   BrowserSwitch.exe --tray         sit in the notification area only - what runs at sign-in
 //   BrowserSwitch.exe --switch Work  make a category live without opening anything
+//   BrowserSwitch.exe --reset        the panic button: every link to the original default browser
 //   BrowserSwitch.exe --dry <url>    write where the link WOULD go to dry-run.log and open nothing
+//        --dry <url> --from X.exe    ...as if the link came from program X.exe (to try app rules)
 //
 // Nothing is assumed and nothing is hard-coded: browsers come from the Windows registry, profiles
 // from each browser's own files, and every category is one you made. If anything fails, the link
@@ -35,8 +37,8 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyProduct("Browser Switch")]
 [assembly: System.Reflection.AssemblyCompany("Browser Switch")]
 [assembly: System.Reflection.AssemblyDescription("Sends each link to the browser and profile you chose")]
-[assembly: System.Reflection.AssemblyVersion("2.7.7.0")]
-[assembly: System.Reflection.AssemblyFileVersion("2.7.7.0")]
+[assembly: System.Reflection.AssemblyVersion("3.3.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("3.3.0.0")]
 
 // ---- what we know about the machine ------------------------------------------------------------
 
@@ -67,6 +69,18 @@ class Category
     public string DefaultKey = "";  // the shortcut it was suggested - what Reset puts back
     public bool InCycle = true;     // included when stepping with next / previous
     public bool KeyOn = true;       // its shortcut is in use; off keeps the key but does nothing
+}
+
+// A link rule - see Rules.cs.
+class Rule
+{
+    public bool On = true;
+    public bool ByApp;          // true: by the app the link came from; false: by its address
+    public string Label = "";   // what the window shows: "Signal", "github.com"
+    public string Match = "";   // app: program file names, ";" between; address: a site, or any text with a "/"
+    public string Category = "";
+
+    public string Describe() { return ByApp ? "comes from " + Label : "address has " + Label; }
 }
 
 // ---- finding browsers and their profiles -------------------------------------------------------
@@ -267,6 +281,15 @@ static class Config
     public static bool NextOn = true, PrevOn = true;           // each can be switched off on its own
     // What a pinned dock icon says when the mouse rests on it: "Work", or "Switch to Work".
     public static bool TipSwitchTo;
+    // Link rules (Rules.cs): checked before the live category, first match wins. RulesOn is the one
+    // switch for all of them - in the window, the dock menu, and on its own shortcut. Off, every
+    // link simply goes to the live category.
+    public static bool RulesOn = true;
+    public static List<Rule> Rules = new List<Rule>();
+    public static string RulesKey = "", RulesDefault = "";
+    public static bool RulesKeyOn = true;
+    // What .htm / .html files look like in File Explorer (FileIcon.cs): "page", "browser" or "own".
+    public static string FileIconStyle = "page";
 
     // config.txt, one line each, so it can be read and edited by hand:
     //     active=Work
@@ -278,6 +301,13 @@ static class Config
     //     default-previous=Ctrl+Alt+Shift+Space
     //     next-on=yes                              ("no": kept, but not in use)
     //     previous-on=yes
+    //     fileicon=page                            (or "browser", or "own": see FileIcon.cs)
+    //     rules=on                                 ("off": every rule kept, none used)
+    //     rules-key=Ctrl+Alt+R                     (turns rules on and off)
+    //     default-rules-key=Ctrl+Alt+R
+    //     rules-key-on=yes
+    //     rule=on|app|Signal|Signal.exe|Work       (on or off | app or address | shown as | matches | category)
+    //     rule=on|address|github.com|github.com|Home
     //     category=Work|C:\...\brave.exe|--profile-directory="Profile 2"|Brave - Work
     //     category=Work|C:\...\brave.exe|--profile-directory="Profile 2"|Brave - Work|1|color:#6366F1|F13|Ctrl+Alt+W|no|off
     // The last six are optional: pinned to the dock ("1" or empty), the dock icon, the shortcut, the
@@ -291,9 +321,10 @@ static class Config
         string text;
         try { text = File.ReadAllText(File_); } catch { return false; }
         Categories.Clear(); Active = ""; FallbackExe = ""; ShortcutsOn = false; NextKey = ""; PrevKey = ""; TipSwitchTo = false;
-        NextDefault = ""; PrevDefault = ""; NextOn = true; PrevOn = true;
+        NextDefault = ""; PrevDefault = ""; NextOn = true; PrevOn = true; RulesOn = true; Rules.Clear();
+        RulesKey = ""; RulesDefault = ""; RulesKeyOn = true; FileIconStyle = "page";
         LastText = text;
-        bool keysSeen = false, nextDefaultSeen = false, prevDefaultSeen = false;
+        bool keysSeen = false, nextDefaultSeen = false, prevDefaultSeen = false, rulesKeySeen = false;
         foreach (string raw in text.Split('\n'))
         {
             string line = raw.Trim();
@@ -308,6 +339,24 @@ static class Config
             if (line.StartsWith("default-previous=", StringComparison.OrdinalIgnoreCase)) { PrevDefault = line.Substring(17).Trim(); prevDefaultSeen = true; continue; }
             if (line.StartsWith("next-on=", StringComparison.OrdinalIgnoreCase)) { NextOn = line.Substring(8).Trim().ToLowerInvariant() != "no"; continue; }
             if (line.StartsWith("previous-on=", StringComparison.OrdinalIgnoreCase)) { PrevOn = line.Substring(12).Trim().ToLowerInvariant() != "no"; continue; }
+            if (line.StartsWith("fileicon=", StringComparison.OrdinalIgnoreCase))
+            {
+                string v = line.Substring(9).Trim().ToLowerInvariant();
+                FileIconStyle = v == "browser" || v == "own" ? v : "page";
+                continue;
+            }
+            if (line.StartsWith("rules-key=", StringComparison.OrdinalIgnoreCase)) { RulesKey = line.Substring(10).Trim(); continue; }
+            if (line.StartsWith("default-rules-key=", StringComparison.OrdinalIgnoreCase)) { RulesDefault = line.Substring(18).Trim(); rulesKeySeen = true; continue; }
+            if (line.StartsWith("rules-key-on=", StringComparison.OrdinalIgnoreCase)) { RulesKeyOn = line.Substring(13).Trim().ToLowerInvariant() != "no"; continue; }
+            if (line.StartsWith("rules=", StringComparison.OrdinalIgnoreCase)) { RulesOn = line.Substring(6).Trim().ToLowerInvariant() != "off"; continue; }
+            if (line.StartsWith("rule=", StringComparison.OrdinalIgnoreCase))
+            {
+                string[] r = line.Substring(5).Split('|');
+                if (r.Length >= 5)
+                    Rules.Add(new Rule { On = r[0].Trim().ToLowerInvariant() != "off", ByApp = r[1].Trim().ToLowerInvariant() == "app",
+                                         Label = r[2].Trim(), Match = r[3].Trim(), Category = r[4].Trim() });
+                continue;
+            }
             if (!line.StartsWith("category=", StringComparison.OrdinalIgnoreCase)) continue;
             string[] bits = line.Substring(9).Split('|');
             if (bits.Length < 3) continue;
@@ -336,7 +385,21 @@ static class Config
             if (!prevDefaultSeen) PrevDefault = prev;
             Suggested = true;
         }
+        // a file from before the rules shortcut existed: suggest one, as for the others
+        if (!rulesKeySeen)
+        {
+            RulesKey = RulesDefault = SuggestRulesKey();
+            Suggested = true;
+        }
         return true;
+    }
+
+    // Ctrl+Alt+R for "rules", or the nearest that is usable here.
+    static string SuggestRulesKey()
+    {
+        foreach (string s in new[] { "Ctrl+Alt+R", "Ctrl+Alt+Shift+R", "Ctrl+Alt+Home", "Ctrl+Alt+End" })
+            if (Usable(s) && s != NextKey && s != PrevKey) return s;
+        return "";
     }
 
     // Set when Load() had to fill in suggested shortcuts. The dock saves them once, so they stay
@@ -406,6 +469,14 @@ static class Config
         sb.AppendLine("default-previous=" + PrevDefault);
         sb.AppendLine("next-on=" + (NextOn ? "yes" : "no"));
         sb.AppendLine("previous-on=" + (PrevOn ? "yes" : "no"));
+        sb.AppendLine("fileicon=" + FileIconStyle);
+        sb.AppendLine("rules=" + (RulesOn ? "on" : "off"));
+        sb.AppendLine("rules-key=" + RulesKey);
+        sb.AppendLine("default-rules-key=" + RulesDefault);
+        sb.AppendLine("rules-key-on=" + (RulesKeyOn ? "yes" : "no"));
+        foreach (var r in Rules)
+            sb.AppendLine("rule=" + (r.On ? "on" : "off") + "|" + (r.ByApp ? "app" : "address") + "|" +
+                          r.Label.Replace("|", "") + "|" + r.Match.Replace("|", "") + "|" + r.Category);
         foreach (var c in Categories)
             sb.AppendLine("category=" + c.Name + "|" + c.Exe + "|" + c.Args + "|" + c.Shows +
                           (c.InDock || c.Icon.Length > 0 || c.HotKey.Length > 0 || c.DefaultKey.Length > 0 || !c.InCycle || !c.KeyOn
@@ -451,13 +522,16 @@ static class Program
 
             if (args[0] == "--switch" && args.Length > 1)
             {
-                Config.Active = args[1]; Config.Save(); return 0;
+                Config.Active = args[1]; Config.Save(); FileIcon.Update(); return 0;
             }
-            // the panic button: no category is live, so links go to the browser that was the default
-            // before any of this existed. Nothing is uninstalled and every category is still there.
+            // the panic button: every link goes to the browser that was the default before any of this
+            // existed - no category live, and rules off, so no rule sends a link elsewhere
+            // either. Nothing is uninstalled; every category and rule is still there.
             if (args[0] == "--reset")
             {
-                Config.Active = ""; Config.Save(); return 0;
+                Config.Active = "";
+                Config.RulesOn = false;
+                Config.Save(); FileIcon.Update(); return 0;
             }
             // Builds the whole window and reports what it holds, without ever showing it. Constructor
             // faults - a bad layout, a null list - are where a window like this breaks, and this
@@ -483,7 +557,7 @@ static class Program
                 foreach (var c in Config.Categories) using (var icon = Tray.IconFor(c)) if (icon != null) built++;
                 sb.AppendLine("dock icons built:  " + built + " of " + Config.Categories.Count);
                 // shortcuts: what is set, whether any would type a character here, whether each is free
-                var keys = Config.Categories.Select(c => c.HotKey).Concat(new[] { Config.NextKey, Config.PrevKey })
+                var keys = Config.Categories.Select(c => c.HotKey).Concat(new[] { Config.NextKey, Config.PrevKey, Config.RulesKey })
                                  .Where(k => k.Length > 0).ToList();
                 sb.AppendLine("shortcuts:         " + (Config.ShortcutsOn ? "on" : "off") + " - " +
                     string.Join(", ", Config.Categories.Select(c => c.Name + " " + (c.HotKey.Length > 0 ? c.HotKey : "(none)") + (c.KeyOn ? "" : " (off)"))) +
@@ -505,6 +579,16 @@ static class Program
                     var busy = keys.Where(k => !probe.IsFree(k)).ToList();
                     sb.AppendLine("free right now:    " + (busy.Count == 0 ? "all" : "not " + string.Join(", ", busy) + " (held by the dock itself, or another program)"));
                 }
+                sb.AppendLine("version:           " + Application.ProductVersion);
+                sb.AppendLine("file icon:         " + FileIcon.Describe(Config.FileIconStyle));
+                sb.AppendLine("rules:             " + (Config.RulesOn ? "on" : "off") + " - " + Config.Rules.Count + " (" +
+                    Config.Rules.Count(r => r.On) + " ticked)" + (Config.Rules.Count > 0 ? ": " +
+                    string.Join(", ", Config.Rules.Select(r => r.Describe() + " -> " + r.Category + (r.On ? "" : " (off)"))) : ""));
+                sb.AppendLine("rules on/off key:  " + (Config.RulesKey.Length > 0 ? Config.RulesKey : "(none)") + (Config.RulesKeyOn ? "" : " (off)"));
+                using (var rd = new RulesDialog(() => { }))
+                using (var ap = new AppPicker())
+                    sb.AppendLine("rules window built: " + rd.Text + ", app list built: " + ap.Text + " (" + AppCatalog.All.Count +
+                                  " apps in " + AppCatalog.Groups.Length + " groups, " + Router.Recent().Count + " seen lately)");
                 File.WriteAllText(Path.Combine(Config.Dir, "selftest.txt"), sb.ToString());
                 return 0;
             }
@@ -519,12 +603,15 @@ static class Program
                 File.WriteAllText(Path.Combine(Config.Dir, "detected.txt"), sb.ToString());
                 return 0;
             }
+            // --dry <url> [--from Signal.exe]: --from pretends the link came from that program
             if (args[0] == "--dry")
             {
                 string exe, extra, why;
-                Resolve(out exe, out extra, out why);
+                string url = args.Length > 1 ? args[1] : "";
+                string from = args.Length > 3 && args[2] == "--from" ? args[3] : null;
+                Resolve(url, from, out exe, out extra, out why);
                 File.WriteAllText(Path.Combine(Config.Dir, "dry-run.log"),
-                    why + "\t" + exe + "\t" + extra + "\t" + (args.Length > 1 ? args[1] : ""));
+                    why + "\t" + exe + "\t" + extra + "\t" + url);
                 return 0;
             }
             Open(args[0]);
@@ -554,15 +641,32 @@ static class Program
     }
 
     // Where a link goes, and why. One place, so that --dry can never disagree with what really
-    // happens: the live category if it has a working browser, otherwise the browser that was the
-    // default before any of this existed (recorded at install time, so an unconfigured machine
-    // behaves exactly as it did before), otherwise whatever browser Windows lists first - because
-    // any browser beats a link that does nothing.
-    public static void Resolve(out string exe, out string extra, out string why)
+    // happens: the first link rule that matches (while rules are on) (the app it came from, or its address), then the
+    // live category if it has a working browser, otherwise the browser that was the default before
+    // any of this existed (recorded at install time, so an unconfigured machine behaves exactly as
+    // it did before), otherwise whatever browser Windows lists first - because any browser beats a
+    // link that does nothing.
+    public static void Resolve(string url, string source, out string exe, out string extra, out string why)
     {
+        Category chosen;
+        Resolve(url, source, out exe, out extra, out why, out chosen);
+    }
+
+    // The same, also saying which category it went to - null for the original or first browser.
+    // The file icon uses it to show the category's own icon.
+    public static void Resolve(string url, string source, out string exe, out string extra, out string why, out Category chosen)
+    {
+        chosen = null;
+        var rule = Router.Decide(url, source);
+        if (rule != null)
+        {
+            var to = Config.Categories.First(x => string.Equals(x.Name, rule.Category, StringComparison.OrdinalIgnoreCase));
+            chosen = to; exe = to.Exe; extra = to.Args; why = to.Name + " (rule: " + rule.Describe() + ")";
+            return;
+        }
         var c = Config.Current();
         if (c != null && c.Exe.Length > 0 && File.Exists(c.Exe))
-        { exe = c.Exe; extra = c.Args; why = Config.Active; return; }
+        { chosen = c; exe = c.Exe; extra = c.Args; why = Config.Active; return; }
 
         extra = "";
         string reason = c != null ? c.Name + " has no browser"
@@ -576,10 +680,26 @@ static class Program
         why = "fallback (first browser found)";
     }
 
+    // The browser that was the default before Browser Switch, by the name Windows gives it.
+    public static string OriginalBrowserName()
+    {
+        string exe = Config.FallbackExe;
+        if (exe.Length == 0 || !File.Exists(exe))
+        {
+            var first = Machine.Browsers().FirstOrDefault();
+            return first == null ? "none found" : first.Name;
+        }
+        var b = Machine.Browsers().FirstOrDefault(x => string.Equals(x.Exe, exe, StringComparison.OrdinalIgnoreCase));
+        return b != null ? b.Name : Path.GetFileNameWithoutExtension(exe);
+    }
+
+    // A link sent by a rule shows no note: the live category has not changed.
     public static void Open(string url)
     {
         string exe, extra, why;
-        Resolve(out exe, out extra, out why);
+        string source = Router.SourceApp();
+        Router.Remember(source);
+        Resolve(url, source, out exe, out extra, out why);
         if (exe.Length > 0) Launch(exe, extra, url);
     }
 

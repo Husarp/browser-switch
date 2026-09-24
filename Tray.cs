@@ -54,13 +54,14 @@ class Tray : ApplicationContext
     readonly HotkeyWindow keys = new HotkeyWindow();
     readonly Dictionary<int, string> keyTargets = new Dictionary<int, string>();   // shortcut id -> category
     SwitchForm window;
-    string lastActive, pinnedShape = "", keysShape = "";
+    string lastActive, lastRules, pinnedShape = "", keysShape = "";
     bool keysPaused;
 
     Tray(bool openWindow)
     {
         ui.CreateControl();
         lastActive = Config.Active;
+        lastRules = RulesShape();
         // shortcuts were just suggested for an older config.txt: keep them, so they do not change
         if (Config.Suggested) { Config.Suggested = false; Config.Save(); }
 
@@ -71,6 +72,7 @@ class Tray : ApplicationContext
         Tips();
         keys.Pressed += Pressed;
         RegisterKeys();
+        FileIcon.Update();
 
         // config.txt also changes from outside: other copies of this program (--switch, --reset) and
         // by hand. Writes come in bursts, so wait a moment for it to settle before reading.
@@ -115,12 +117,30 @@ class Tray : ApplicationContext
         if (already) using (var icon = IconFor(c)) note.Say("Links already open in:  " + c.Name, c.Shows, icon);
     }
 
+    static string RulesShape() { return Config.RulesOn ? "on" : "off"; }
+
+    // The rules switch: from its shortcut and the dock menu. The window flips Config.RulesOn itself;
+    // either way Refresh() shows the note.
+    void ToggleRules()
+    {
+        Config.RulesOn = !Config.RulesOn;
+        Config.Save();
+        if (window != null && !window.IsDisposed) window.Reload();
+        Refresh();
+    }
+
+    static string RulesCount()
+    {
+        int n = Config.Rules.Count(r => r.On);
+        return n == 0 ? "no rules ticked yet" : n == 1 ? "1 rule in use" : n + " rules in use";
+    }
+
     // ---- keyboard shortcuts ---------------------------------------------------------------------
 
     string KeysShape()
     {
         return (Config.ShortcutsOn ? "on" : "off") + "|" + (Config.NextOn ? Config.NextKey : "") + "|" +
-               (Config.PrevOn ? Config.PrevKey : "") + "|" +
+               (Config.PrevOn ? Config.PrevKey : "") + "|" + (Config.RulesKeyOn ? Config.RulesKey : "") + "|" +
                string.Join("|", Config.Categories.Select(c => c.Name + "=" + (c.KeyOn ? c.HotKey : "")));
     }
 
@@ -134,6 +154,7 @@ class Tray : ApplicationContext
         if (!Config.ShortcutsOn || keysPaused) return;
         if (Config.NextOn && Config.NextKey.Length > 0) keys.Add(1, Config.NextKey);
         if (Config.PrevOn && Config.PrevKey.Length > 0) keys.Add(2, Config.PrevKey);
+        if (Config.RulesKeyOn && Config.RulesKey.Length > 0) keys.Add(3, Config.RulesKey);
         int id = 100;
         foreach (var c in Config.Categories)
         {
@@ -152,6 +173,7 @@ class Tray : ApplicationContext
     {
         if (id == 1) Step(1);
         else if (id == 2) Step(-1);
+        else if (id == 3) ToggleRules();
         else { string name; if (keyTargets.TryGetValue(id, out name)) SwitchTo(Find(name)); }
     }
 
@@ -193,11 +215,21 @@ class Tray : ApplicationContext
         if (Shape() != pinnedShape) Pin();
         if (KeysShape() != keysShape) RegisterKeys();
         Tips();
-        if (string.Equals(Config.Active, lastActive, StringComparison.OrdinalIgnoreCase)) return;
+        FileIcon.Update();     // .htm / .html files show the browser they now open in
+        bool activeChanged = !string.Equals(Config.Active, lastActive, StringComparison.OrdinalIgnoreCase);
+        bool rulesChanged = RulesShape() != lastRules;
+        if (!activeChanged && !rulesChanged) return;
         lastActive = Config.Active;
+        lastRules = RulesShape();
         var live = Config.Current();
-        if (live != null) using (var icon = IconFor(live)) note.Say("Links now open in:  " + live.Name, live.Shows, icon);
-        else note.Say("No category is live", "Links open in your original browser", null);
+        string where = live != null ? live.Name : "your original browser";
+        if (rulesChanged && !activeChanged)
+            using (var icon = live != null ? IconFor(live) : null)
+                note.Say(Config.RulesOn ? "Rules on" : "Rules off",
+                         Config.RulesOn ? RulesCount() + " - other links open in " + where : "Every link opens in " + where, icon);
+        else if (live != null) using (var icon = IconFor(live))
+            note.Say("Links now open in:  " + live.Name, live.Shows, icon);
+        else note.Say("No category is live", "Links open in your original browser" + (rulesChanged && !Config.RulesOn ? " - rules off" : ""), null);
     }
 
     string Shape()
@@ -225,7 +257,8 @@ class Tray : ApplicationContext
     void Tips()
     {
         var live = Config.Current();
-        main.Text = Cut("Browser Switch - " + (live != null ? "links open in " + live.Name : "no category live"));
+        main.Text = Cut("Browser Switch - " + (live != null ? "links open in " + live.Name : "no category live") +
+                        (!Config.RulesOn ? ", rules off" : ""));
         foreach (var n in pinned)
         {
             var c = Find((string)n.Tag);
@@ -269,6 +302,24 @@ class Tray : ApplicationContext
             menu.Items.Add(item);
         }
         if (menu.Items.Count > 0) menu.Items.Add(new ToolStripSeparator());
+        // rules: one click off, one click on
+        var rules = new ToolStripMenuItem("Use rules  (" + RulesCount() + ")")
+        {
+            Checked = Config.RulesOn,
+            ShortcutKeyDisplayString = Config.ShortcutsOn && Config.RulesKeyOn ? Config.RulesKey : ""
+        };
+        rules.Click += (s, e) => ToggleRules();
+        menu.Items.Add(rules);
+        // what web page files look like in File Explorer
+        var looks = new ToolStripMenuItem("Icon of .htm / .html files");
+        foreach (string style in new[] { "page", "browser", "own" })
+        {
+            string pick = style;
+            var item = new ToolStripMenuItem(FileIcon.Describe(style)) { Checked = Config.FileIconStyle == style };
+            item.Click += (s, e) => { Config.FileIconStyle = pick; Config.Save(); FileIcon.Update(); };
+            looks.DropDownItems.Add(item);
+        }
+        menu.Items.Add(looks);
         var example = Config.Categories.FirstOrDefault(c => c.InDock);
         if (example != null)
         {

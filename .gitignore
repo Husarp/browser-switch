@@ -11,3 +11,5 @@ errors.log
 dry-run.log
 detected.txt
 selftest.txt
+recent-apps.txt
+file-icons/

@@ -1,8 +1,18 @@
-﻿# Browser Switch
+# Browser Switch
 
 Decides which browser — and which **profile** of it — every link on this computer opens in. You make
 named categories like Work, Home or School, point each at a browser profile, and switch between them
 with one click.
+
+## What it does
+
+- **Categories** — Work, Home, School… each pointing at a browser and profile; one click switches.
+- **The dock** — lives next to the clock, with an icon per category if you like, and a short note
+  after every switch.
+- **Keyboard shortcuts** — one per category, next / previous, and rules on / off.
+- **Link rules** — links from chosen apps (Signal → Work) or to chosen sites (github.com → Home) go
+  to their own category, whatever is live. A ready-made list of ~175 popular apps to pick from.
+- **Web page files** (`.htm`, `.html`) show the browser they will open in.
 
 ## Why it is built this way
 
@@ -13,9 +23,8 @@ your browser, and it is worth keeping.
 So this does not fight it. **Browser Switch becomes the default browser** and passes each link
 straight on to the real one, based on which category is live.
 
-Nothing was downloaded to build it. `BrowserSwitch.exe` is about 110 KB, much of it the icon,
-compiled from the four `.cs` files and `BrowserSwitch.ico` by the C# compiler already inside Windows
-(`build.cmd` rebuilds it).
+Nothing was downloaded to build it. `BrowserSwitch.exe` is compiled from the `.cs` files and
+`BrowserSwitch.ico` by the C# compiler already inside Windows (`build.cmd` rebuilds it).
 
 ## The dock
 
@@ -43,6 +52,17 @@ when you sign in. It has no taskbar button.
 Windows puts new icons in the hidden-icons area first — the **^** arrow next to the clock. To keep
 one always visible, drag it from there onto the taskbar, or switch it on in Settings →
 Personalization → Taskbar → *Other system tray icons*.
+
+## Web page files
+
+Saved web pages — `.htm` and `.html` files — show **the browser they will open in**: a white page
+with that browser's icon on its corner, the same icon as in the dock (with the profile's picture,
+or recoloured, if yours is). It follows every switch, and the rules too, so the icon
+always tells the truth about where a double-click goes.
+
+Right-click the dock icon → *Icon of .htm / .html files* to choose the look: **A web page with the
+browser's icon**, **The browser's icon** alone, or **Browser Switch's own icon**. Windows usually
+redraws at once; if an open folder still shows the old icon, press F5 in it.
 
 ## Keyboard shortcuts
 
@@ -80,17 +100,47 @@ Personalization → Taskbar → *Other system tray icons*.
   That is allowed; it is your choice. On Polish and many other keyboards **Ctrl+Alt is AltGr** —
   Ctrl+Alt+A types ą — so those are never *suggested*, and are flagged the same way if you pick one.
 
+## Link rules
+
+Some links should always go to the same place, whatever is live: links from Signal to Work, GitHub
+links to Home. In the window, **Rules…**.
+
+- **Two kinds.** *comes from an app* — the program the link was clicked in; *address has* — a site
+  like `github.com`, which also covers the sites under it (`gist.github.com`), or any text with a `/`
+  in it (`github.com/my-company`), looked for anywhere in the link.
+- **Rules win over the live category.** They are checked from the top, and the first that matches
+  decides — **Move up / Move down** set the order. A link no rule matches goes to the live category
+  as always. A link sent by a rule shows no note.
+- **A tick per rule** keeps it but stops it. A rule whose category has been deleted is skipped.
+- **Rules on / off — one switch for all of them**, reachable three ways: the **Use rules** tick at the
+  top of the window, *Use rules* in the dock's right-click menu, and its own **keyboard shortcut**
+  (in *Shortcuts…*, suggested Ctrl+Alt+R, or the nearest free one). Off, every link simply opens in
+  the live category — switch category and all links follow. The note says which it is now.
+- **Add apps…** opens a ready-made list of about 175 popular apps in groups — chat & social, work &
+  office, email, AI assistants, notes & study, gaming, development, music & video, creative, files &
+  sync, utilities — with a search box. Tick any number, choose their category, **Add**. **Opened
+  links lately** lists the programs that really opened links on this PC, and **Browse for a
+  program…** takes any other.
+- **How the app is known:** when a program opens a link, Windows starts Browser Switch from inside
+  it, so Browser Switch asks Windows who started it. A few apps — mostly from the Microsoft Store —
+  hand links over through a Windows go-between; their rules cannot see them, so use an address rule
+  for those. *Opened links lately* shows what really opened your links.
+
 ## The window
 
-Click the dock icon, or **Switch browser** on your Desktop.
+Click the dock icon, or **Switch browser** on your Desktop. Wherever something needs explaining
+there is a small round **?** — point at it, or click it.
 
-- **Left** — your categories, and what each one points at. The live one is marked ●. Below them:
-  **Show in dock** and **Dock icon…** for the selected category.
+- **Top** — where links go right now, with the category's icon, and the **Use rules** switch
+  under it.
+- **Left** — your categories, each with its icon and what it opens in; the live one is tagged
+  **LIVE**. Below them: **Show in dock** and **Dock icon…** for the selected category.
 - **Right** — every browser on this computer, with its profiles underneath. Nothing is hard-coded:
   browsers come from the Windows registry, Firefox profiles from `profiles.ini`, and Chrome / Edge /
   Brave / Vivaldi profiles from each browser's own `Local State` file, so the names shown are the
   names you gave them.
-- **Bottom** — one button per category. Click one and links go there from that moment on.
+- **Bottom** — one button per category: click one and links go there from that moment on. On the
+  right, **Rules…** and **Shortcuts…**.
 
 To set a category up: select it on the left, select a profile on the right, press **Use this for …**.
 
@@ -101,8 +151,10 @@ To set a category up: select it on the left, select a profile on the right, pres
 | **Switch browser** (Desktop) | opens the window |
 | **Browser Switch** (Start menu) | opens the same window |
 | **Browser Switch** (Startup folder) | starts the dock when you sign in. Delete it to stop that — nothing else depends on it |
-| **Back to normal.cmd** | the panic button — turns every category off, so links go to your original default browser. Nothing is uninstalled and no category is lost |
-| `config.txt` | your categories, in plain text. The window writes it; you can edit it by hand |
+| **Back to normal.cmd** | the panic button — every link goes to your original default browser: no category is live any more, and the rules are switched off too. Nothing is uninstalled and no category or rule is lost |
+| `config.txt` | your categories, rules and settings, in plain text. The window writes it; you can edit it by hand |
+| `file-icons\` | the icon web page files show right now — drawn after each switch; safe to delete |
+| `recent-apps.txt` | the programs that opened links lately — offered when you add app rules |
 | **Install.cmd** | double-click to register Browser Switch with Windows — runs `install.ps1` |
 | `install.ps1` | adds Browser Switch to the Windows list of browsers |
 | `uninstall.ps1` | removes it completely |
@@ -115,11 +167,11 @@ To set a category up: select it on the left, select a profile on the right, pres
 Needs Windows 10 or 11.
 
 1. **Get the program**, either way:
-   - **Download** `BrowserSwitch-<version>.zip` from the
-     [Releases page](https://github.com/Husarp/browser-switch/releases) and unzip it into a folder
-     you will keep. The program is not signed, so Windows may say *"Windows protected your PC"* the
+   - **Download** from the [Releases page](https://github.com/Husarp/browser-switch/releases) —
+     `BrowserSwitch-<version>.zip` — and unzip it
+     into a folder you will keep. The program is not signed, so Windows may say *"Windows protected your PC"* the
      first time — *More info → Run anyway*.
-   - or **build it**: double-click `build.cmd`, which makes `BrowserSwitch.exe` with the C# compiler
+   - or **build it**: double-click `build.cmd`. It makes `BrowserSwitch.exe` with the C# compiler
      already inside Windows (.NET Framework 4). Nothing is downloaded.
 
    Keep the folder where it is afterwards: Windows is told to run the program from there.
@@ -158,10 +210,12 @@ What `install.ps1` sets up, and why:
 A link must never die because the switcher is confused. Where a link goes is worked out in one place,
 and `--dry` reports exactly what a real click would do, so the two can never disagree:
 
-1. the live category, if its browser still exists;
-2. otherwise the browser that was your default **before** Browser Switch was installed — recorded at
+1. *(while rules are on)* the first ticked rule that matches, if its category's browser
+   still exists;
+2. the live category, if its browser still exists;
+3. otherwise the browser that was your default **before** Browser Switch was installed — recorded at
    install time, so a machine with nothing set up behaves exactly as it did before;
-3. otherwise the first browser Windows lists.
+4. otherwise the first browser Windows lists.
 
 Anything unexpected is written to `errors.log`. Tested against: no config at all, a config with no
 categories, a live category with no browser chosen, and a category pointing at a browser that has
@@ -169,7 +223,8 @@ been deleted — all four fall through correctly.
 
 Two levels of undo, on purpose:
 
-- **Pause** — `Back to normal.cmd`. Instant, nothing removed, one click away from switching back on.
+- **Pause** — `Back to normal.cmd`. Instant, nothing removed; pick a category and tick *Use rules*
+  to switch back on.
 - **Remove** — set a real browser as default in Settings, then run `uninstall.ps1`. Every registry
   key it created lives under your own user account and is deleted. `uninstall.ps1` refuses to run
   while Browser Switch is still the default and opens Settings instead, so Windows is never left
@@ -183,8 +238,9 @@ BrowserSwitch.exe <url>          open a link in the live category
 BrowserSwitch.exe                open the window (starting the dock if it is not running)
 BrowserSwitch.exe --tray         start the dock only - what runs when you sign in
 BrowserSwitch.exe --switch Work  make a category live, no window
-BrowserSwitch.exe --reset        no category live; links go to the original default browser
+BrowserSwitch.exe --reset        every link to the original default browser - and rules off
 BrowserSwitch.exe --dry <url>    write where the link WOULD go to dry-run.log, open nothing
+   --dry <url> --from Signal.exe   ...as if the link had been clicked in Signal (tries app rules)
 BrowserSwitch.exe --list         write the browsers and profiles it can see to detected.txt
 BrowserSwitch.exe --selftest     build the window in memory and report what it holds, without showing it
 ```
