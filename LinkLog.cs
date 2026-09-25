@@ -1,4 +1,4 @@
-// The link log: every link Browser Switch handed on - when, from which app, where it opened and why,
+// The link log: every link LinkPilot handed on - when, from which app, where it opened and why,
 // and whether it was changed on the way (a redirect skipped, tracking removed).
 //
 // It is kept only on this computer, in link-log.txt next to the program, one line per link, the
@@ -108,11 +108,15 @@ class LogPage : UserControl
                                 Margin = new Padding(3, 5, 3, 3) };
         on.CheckedChanged += delegate { Config.LogOn = on.Checked; save(); };
         top.Controls.Add(on);
-        top.Controls.Add(new HelpMark("Every link Browser Switch hands on: when, which app it came from, where it opened and " +
-            "why, and whether it was changed on the way - with the link as it came, and as it was opened.\n" +
-            "The log stays on this computer only, in link-log.txt next to Browser Switch, and keeps the newest " +
-            LinkLog.Keep + " links. Nothing is sent anywhere. Untick to stop logging; Clear log deletes it.")
-            { Margin = new Padding(4, 8, 0, 0) });
+        top.Controls.Add(new TabHelp("The Link log tab",
+            "# The list",
+            "Every link: when, from which app, where it went, what changed - cleaned copies too, as (copied).",
+            "Select one: see it in full below.",
+            "# The buttons",
+            "Copy link / Open again: copy it, or send it again through the rules and the live category.",
+            "Clear log: deletes it. Untick Keep a log to stop.",
+            "# Private",
+            "Only here: link-log.txt next to LinkPilot, the newest " + LinkLog.Keep + " links. Nothing is sent.") { Margin = new Padding(6, 6, 0, 0) });
         top.Controls.Add(count);
 
         list.Columns.Add("When", 118);
@@ -134,7 +138,7 @@ class LogPage : UserControl
         var clear = new Button { Text = "Clear log", AutoSize = true, Margin = new Padding(24, 3, 3, 3) };
         clear.Click += delegate
         {
-            if (MessageBox.Show(FindForm(), "Delete the whole link log?", "Browser Switch", MessageBoxButtons.YesNo,
+            if (MessageBox.Show(FindForm(), "Delete the whole link log?", "LinkPilot", MessageBoxButtons.YesNo,
                                 MessageBoxIcon.Question) != DialogResult.Yes) return;
             LinkLog.Clear();
             Fill();
@@ -148,7 +152,7 @@ class LogPage : UserControl
         Controls.Add(buttons);
         Fill();
 
-        // a new link is written by the short-lived copy of Browser Switch that handed it on; the list
+        // a new link is written by the short-lived copy of LinkPilot that handed it on; the list
         // follows, a moment later, keeping the line you had selected
         var watch = new FileSystemWatcher(Config.Dir, Path.GetFileName(LinkLog.File_)) { SynchronizingObject = this, EnableRaisingEvents = true };
         var settle = new System.Windows.Forms.Timer { Interval = 300 };

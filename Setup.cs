@@ -1,9 +1,9 @@
-// The setup screen: what the window shows on the very first start, and again whenever Browser Switch
+// The setup screen: what the window shows on the very first start, and again whenever LinkPilot
 // is not the default browser.
 //
-// Three steps. The first says how Browser Switch works and why it can be trusted - what it needs,
-// that it works offline, what the internet is used for. The second asks for three choices: link
-// cleaning, the link log, and asking GitHub for updates. The third is the one thing Windows leaves to
+// Three steps. The first says how LinkPilot works and why it can be trusted - what it needs,
+// that it works offline, what the internet is used for. The second asks for the choices: link
+// cleaning (of copied links too), the link log, and asking GitHub for updates. The third is the one thing Windows leaves to
 // the person at the computer: making it the default browser - or, if it already is, says so. Then a
 // big "You're all set", which also makes a first category from the browser used so far if there is
 // none, and Finish.
@@ -25,7 +25,7 @@ partial class SwitchForm
     Control setupTodo, setupAlready;      // step 3: the steps to take, or "already done"
     Button setupGo;                       // step 3's blue button: Open Windows Settings, or Next
     Label setupStatus, setupNext;
-    CheckBox chooseClean, chooseLog, chooseUpdates;
+    CheckBox chooseClean, chooseCopied, chooseLog, chooseUpdates;
     bool madeFirstCategory;
     readonly Timer setupWatch = new Timer { Interval = 1500 };
     readonly List<Control> mainScreen = new List<Control>();   // hidden while the setup screen shows
@@ -34,12 +34,13 @@ partial class SwitchForm
     static readonly Color Done = Color.FromArgb(16, 124, 65);
 
     // Shows the setup screen over everything else, on its first step. Called when the window opens
-    // on a first start or while Browser Switch is not the default browser; also from About & updates.
+    // on a first start or while LinkPilot is not the default browser; also from About & updates.
     public void ShowSetup()
     {
         if (setup == null) BuildSetup();
         foreach (var c in mainScreen) c.Visible = false;
         chooseClean.Checked = Config.CleanOn && Config.UnwrapOn;
+        chooseCopied.Checked = Config.CopyCleanOn;
         chooseLog.Checked = Config.LogOn;
         chooseUpdates.Checked = Config.UpdateCheck;
         SetupStep(1);
@@ -72,17 +73,18 @@ partial class SwitchForm
         if (step == 3 && !IsDefaultBrowser) setupWatch.Start(); else setupWatch.Stop();
     }
 
-    // The three choices of the second step, as they are ticked.
+    // The choices of the second step, as they are ticked.
     void KeepChoices()
     {
         Config.CleanOn = Config.UnwrapOn = chooseClean.Checked;
+        Config.CopyCleanOn = chooseCopied.Checked;
         Config.LogOn = chooseLog.Checked;
         Config.UpdateCheck = chooseUpdates.Checked;
         Save();
     }
 
     // Back to the main screen - on Finish, or Skip. The setup has been seen: it comes back by itself
-    // only while Browser Switch is not the default browser.
+    // only while LinkPilot is not the default browser.
     void LeaveSetup()
     {
         setupWatch.Stop();
@@ -135,11 +137,11 @@ partial class SwitchForm
         };
 
         // ---- step 1: how it works ----
-        setupHow.Controls.Add(Title("Welcome to Browser Switch", "Step 1 of 3 - how it works"));
+        setupHow.Controls.Add(Title("Welcome to LinkPilot", "Step 1 of 3 - how it works"));
         setupHow.Controls.Add(Heading("One step is needed - here is why"));
         setupHow.Controls.Add(Text_(
-            "Browser Switch decides which browser - and which profile of it - each link opens in. For that, every link " +
-            "has to pass through it first, and Windows sends links only to your default browser. So Browser Switch has " +
+            "LinkPilot decides which browser - and which profile of it - each link opens in. For that, every link " +
+            "has to pass through it first, and Windows sends links only to your default browser. So LinkPilot has " +
             "to be your default browser; it then hands each link straight on to the browser you chose. This is the " +
             "only way it can work.\n" +
             "Windows lets only you make this choice - no program and no command may make it for you. That protects " +
@@ -151,7 +153,7 @@ partial class SwitchForm
                                            Width = SetupWidth, MaximumSize = new Size(SetupWidth, 0) };
         trust.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 185));
         trust.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        Trust(trust, "Fully offline", "Everything works without the internet. The only time Browser Switch goes online is " +
+        Trust(trust, "Fully offline", "Everything works without the internet. The only time LinkPilot goes online is " +
               "to ask GitHub for a newer version - and only if you allow it in the next step.");
         Trust(trust, "Sends nothing", "No account, no ads, no tracking, nothing collected. Your links, settings and the " +
               "link log stay in its own folder on this PC.");
@@ -159,7 +161,7 @@ partial class SwitchForm
               "nothing is in it for anyone else.");
         Trust(trust, "Open", "Every file is public on GitHub, to read or to build yourself - what runs is what you can see.");
         Trust(trust, "Easy to undo", "Your other browsers stay as they are. Make one of them the default again at any " +
-              "time, or uninstall Browser Switch.");
+              "time, or uninstall LinkPilot.");
         setupHow.Controls.Add(trust);
         var next = PrimaryButton("Next  →");
         next.Click += delegate { SetupStep(2); };
@@ -170,25 +172,28 @@ partial class SwitchForm
         chooseClean = Choice(setupChoices, "Clean links", "Takes tracking out of links - utm_source, fbclid, YouTube's si... - and " +
                              "skips redirects such as google.com/url?q=..., so the page opens directly. Only parts known to be " +
                              "tracking are removed, so links keep working.");
+        chooseCopied = Choice(setupChoices, "Clean copied links too", "When you copy a link on its own - YouTube's Copy link, " +
+                              "a link from a chat - it is cleaned the same way right away, so you paste the clean link. Text " +
+                              "with a link inside, and anything a password manager copies, is left alone. Nothing is kept.");
         chooseLog = Choice(setupChoices, "Keep a log of links", "Which app each link came from, where it opened, and what was " +
                            "changed - kept on this PC only, the newest " + LinkLog.Keep + " links.");
         chooseUpdates = Choice(setupChoices, "Check for updates automatically", "Once a day, ask GitHub whether a newer version " +
-                               "exists - the only time Browser Switch goes online. Left off, it asks only when you press Check now " +
+                               "exists - the only time LinkPilot goes online. Left off, it asks only when you press Check now " +
                                "on the About & updates tab. Nothing is downloaded until you choose to update.");
         var next2 = PrimaryButton("Next  →");
         next2.Click += delegate { KeepChoices(); SetupStep(3); };
         setupChoices.Controls.Add(NavRow(next2, Link("←  Back", () => SetupStep(1))));
 
         // ---- step 3: making it the default browser - or saying it already is ----
-        setupDefault.Controls.Add(Title("Make Browser Switch your default browser", "Step 3 of 3 - the one step Windows leaves to you"));
+        setupDefault.Controls.Add(Title("Make LinkPilot your default browser", "Step 3 of 3 - the one step Windows leaves to you"));
         var todo = Column();
         todo.Top = 0; todo.Margin = new Padding(0);
         todo.Controls.Add(Text_(
-            "1.  Press Open Windows Settings below - it opens on Browser Switch's own page.\n" +
-            "     Give it a few seconds: Settings first looks Browser Switch up, and only then shows the Set default\n" +
+            "1.  Press Open Windows Settings below - it opens on LinkPilot's own page.\n" +
+            "     Give it a few seconds: Settings first looks LinkPilot up, and only then shows the Set default\n" +
             "     button at the top. Wait for it - nothing is wrong.\n" +
             "2.  Windows 11: press Set default at the top of that page.\n" +
-            "     Windows 10: under Web browser, click the browser shown and choose Browser Switch.\n" +
+            "     Windows 10: under Web browser, click the browser shown and choose LinkPilot.\n" +
             "3.  Come back here - this screen notices by itself and takes you on."));
         todo.Controls.Add(Text_(
             "Why not automatically? Windows keeps the default browser as a choice only you can make: a program - or a " +
@@ -196,7 +201,7 @@ partial class SwitchForm
             "from taking over your browser, and why this one click is yours."));
         setupTodo = todo;
         setupDefault.Controls.Add(todo);
-        setupAlready = Banner("✓", "Already done", "Browser Switch is already your default browser - there is nothing to do here.");
+        setupAlready = Banner("✓", "Already done", "LinkPilot is already your default browser - there is nothing to do here.");
         setupDefault.Controls.Add(setupAlready);
         setupGo = PrimaryButton("Open Windows Settings");
         setupGo.Click += delegate
@@ -212,8 +217,8 @@ partial class SwitchForm
         setupDefault.Controls.Add(setupStatus);
 
         // ---- you're all set ----
-        setupDone.Controls.Add(Banner("✓", "You're all set!", "Browser Switch is your default browser."));
-        setupDone.Controls.Add(Text_("From now on every link passes through Browser Switch, and goes on to the browser you choose."));
+        setupDone.Controls.Add(Banner("✓", "You're all set!", "LinkPilot is your default browser."));
+        setupDone.Controls.Add(Text_("From now on every link passes through LinkPilot, and goes on to the browser you choose."));
         setupNext = Text_("");
         setupDone.Controls.Add(setupNext);
         var finish = PrimaryButton("Finish");

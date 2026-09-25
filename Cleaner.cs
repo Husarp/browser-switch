@@ -11,12 +11,13 @@
 // be followed: where they lead is only known to their server.
 //
 // It works on links that come from other programs - email, chat, documents. A link clicked inside a
-// browser never leaves it, so Browser Switch never sees it; that needs a browser extension.
+// browser never leaves it, so LinkPilot never sees it; that needs a browser extension.
 
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 static class Cleaner
@@ -75,12 +76,83 @@ static class Cleaner
         P("dib", "amazon.*", "Amazon search tracking"),
         P("dib_tag", "amazon.*", "Amazon search tracking"),
         P("content-id", "amazon.*", "Amazon page tracking"),
+        // online shops: from ClearURLs' rules (clearurls.xyz), plus the share-link parts of Temu and Shein
+        P("__mk_*", "amazon.*", "Amazon language tracking"),
+        P("spIA", "amazon.*", "Amazon tracking"),
+        P("ms3_c", "amazon.*", "Amazon tracking"),
+        P("refRID", "amazon.*", "Amazon tracking"),
+        P("_encoding", "amazon.*", "Amazon tracking"),
+        P("smid", "amazon.*", "Amazon seller tracking"),
+        P("rnid", "amazon.*", "Amazon tracking"),
+        P("dchild", "amazon.*", "Amazon tracking"),
+        P("aaxitk", "amazon.*", "Amazon ad tracking"),
+        P("hsa_cr_id", "amazon.*", "Amazon ad tracking"),
+        P("sb-ci-*", "amazon.*", "Amazon ad tracking"),
+        P("social_share", "amazon.*", "Amazon share tracking"),
+        P("starsLeft", "amazon.*", "Amazon tracking"),
+        P("skipTwisterOG", "amazon.*", "Amazon tracking"),
+        P("linkCode", "amazon.*", "Amazon affiliate tracking"),
+        P("linkId", "amazon.*", "Amazon affiliate tracking"),
+        P("creativeASIN", "amazon.*", "Amazon affiliate tracking"),
+        P("ascsubtag", "amazon.*", "Amazon affiliate tracking"),
+        P("camp", "amazon.*", "Amazon affiliate tracking"),
+        P("creative", "amazon.*", "Amazon affiliate tracking"),
         P("_trkparms", "ebay.*", "eBay tracking"),
         P("_trksid", "ebay.*", "eBay tracking"),
+        P("_from", "ebay.*", "eBay tracking"),
+        P("hash", "ebay.*", "eBay tracking"),
+        P("amdata", "ebay.*", "eBay tracking"),
+        P("mkcid", "ebay.*", "eBay marketing tracking"),
+        P("mkevt", "ebay.*", "eBay marketing tracking"),
+        P("mkrid", "ebay.*", "eBay marketing tracking"),
+        P("campid", "ebay.*", "eBay affiliate tracking"),
+        P("toolid", "ebay.*", "eBay affiliate tracking"),
+        P("customid", "ebay.*", "eBay affiliate tracking"),
         P("spm", "aliexpress.*", "AliExpress tracking"),
-        P("scm", "aliexpress.*", "AliExpress tracking"),
+        P("scm*", "aliexpress.*", "AliExpress tracking"),
         P("pvid", "aliexpress.*", "AliExpress tracking"),
         P("algo_*", "aliexpress.*", "AliExpress tracking"),
+        P("ws_ab_test", "aliexpress.*", "AliExpress tracking"),
+        P("btsid", "aliexpress.*", "AliExpress tracking"),
+        P("gps-id", "aliexpress.*", "AliExpress tracking"),
+        P("cv", "aliexpress.*", "AliExpress tracking"),
+        P("af", "aliexpress.*", "AliExpress tracking"),
+        P("dp", "aliexpress.*", "AliExpress tracking"),
+        P("sk", "aliexpress.*", "AliExpress share tracking"),
+        P("mall_affr", "aliexpress.*", "AliExpress affiliate tracking"),
+        P("terminal_id", "aliexpress.*", "AliExpress tracking - which device"),
+        P("aff_*", "aliexpress.*", "AliExpress affiliate tracking"),
+        P("afSmartRedirect", "aliexpress.*", "AliExpress affiliate tracking"),
+        P("srcSns", "aliexpress.*", "AliExpress share tracking"),
+        P("spreadType", "aliexpress.*", "AliExpress share tracking"),
+        P("bizType", "aliexpress.*", "AliExpress share tracking"),
+        P("social_params", "aliexpress.*", "AliExpress share tracking"),
+        P("pdp_npi", "aliexpress.*", "AliExpress tracking - the price you saw"),
+        P("pdp_ext_f", "aliexpress.*", "AliExpress tracking"),
+        P("gatewayAdapt", "aliexpress.*", "AliExpress tracking"),
+        P("bi_*", "allegro.*", "Allegro ad and listing tracking"),
+        P("reco_id", "allegro.*", "Allegro recommendation tracking"),
+        P("sid", "allegro.*", "Allegro session tracking"),
+        P("emission_unit_id", "allegro.*", "Allegro ad tracking"),
+        P("emission_id", "allegro.*", "Allegro ad tracking"),
+        P("_x_*", "temu.*", "Temu tracking"),
+        P("refer_page_*", "temu.*", "Temu tracking - where you came from"),
+        P("share_uin", "temu.*", "Temu share tracking - who shared it"),
+        P("_bg_fs", "temu.*", "Temu tracking"),
+        P("_oak_*", "temu.*", "Temu tracking"),
+        P("_p_rfs", "temu.*", "Temu tracking"),
+        P("src_module", "shein.*", "Shein tracking"),
+        P("src_identifier", "shein.*", "Shein tracking"),
+        P("src_tab_page_id", "shein.*", "Shein tracking"),
+        P("url_from", "shein.*", "Shein share tracking"),
+        P("click_key", "etsy.com", "Etsy tracking"),
+        P("click_sum", "etsy.com", "Etsy tracking"),
+        P("organic_search_click", "etsy.com", "Etsy tracking"),
+        P("ref", "etsy.com", "Etsy referral"),
+        P("ga_*", "etsy.com", "Etsy tracking"),
+        P("u1", "walmart.*", "Walmart tracking"),
+        P("ath*", "walmart.*", "Walmart ad tracking"),
+        P("tag", "ceneo.pl", "Ceneo tracking"),
     };
 
     public static readonly List<Redirect> Redirects = new List<Redirect> {
@@ -240,6 +312,81 @@ static class Cleaner
     }
 }
 
+// Copied links, cleaned: while it is turned on, the dock is told each time something is copied. If
+// what was copied is one link and nothing else - YouTube's "Copy link" with its ?si=... - the same
+// cleaning is done to it and the clean link is put back, so pasting gives the clean one.
+//
+// Anything else is left exactly as it was: text with a link inside, several lines, and whatever a
+// password manager copies (it marks that as private). The copied text is only looked at in memory
+// and never kept - except the link itself in the link log, if that is on. Windows' own clipboard
+// history (Win+V) keeps the link as it was copied too: it takes it before any program can clean it.
+class CopiedLinks : NativeWindow, IDisposable
+{
+    [DllImport("user32.dll")] static extern bool AddClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterClipboardFormat(string name);
+    [DllImport("user32.dll")] static extern bool IsClipboardFormatAvailable(uint format);
+    [DllImport("user32.dll")] static extern IntPtr GetClipboardOwner();
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    const int WM_CLIPBOARDUPDATE = 0x031D;
+
+    // How password managers (and other careful programs) say "private - do not look, do not keep".
+    static readonly uint[] Private = {
+        RegisterClipboardFormat("ExcludeClipboardContentFromMonitorProcessing"),
+        RegisterClipboardFormat("Clipboard Viewer Ignore"),
+        RegisterClipboardFormat("CanIncludeInClipboardHistory") };
+
+    // A program can write the clipboard in a few quick steps; look once it has finished.
+    readonly Timer settle = new Timer { Interval = 150 };
+    public event Action<string> Cleaned;   // what was done, for the note on screen
+
+    public CopiedLinks()
+    {
+        CreateHandle(new CreateParams { Parent = new IntPtr(-3) });   // message-only
+        AddClipboardFormatListener(Handle);
+        settle.Tick += delegate { settle.Stop(); Look(); };
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_CLIPBOARDUPDATE && Config.CopyCleanOn) { settle.Stop(); settle.Start(); }
+        base.WndProc(ref m);
+    }
+
+    void Look()
+    {
+        if (!Config.CopyCleanOn || Private.Any(IsClipboardFormatAvailable)) return;
+        string text;
+        try { if (!Clipboard.ContainsText()) return; text = Clipboard.GetText(); } catch { return; }   // busy: leave it
+        string link = text.Trim();
+        if (link.Length == 0 || link.Length > 4000 || link.Any(char.IsWhiteSpace)) return;   // not one link on its own
+        string changes, clean = Cleaner.Apply(link, out changes);
+        if (changes.Length == 0 || clean == link) return;   // nothing to take out - and the clean one, put back, stops here
+        string from = CopiedFrom();
+        try { Clipboard.SetDataObject(text.Replace(link, clean), true, 5, 50); } catch { return; }
+        LinkLog.Add(new LinkLog.Entry { When = DateTime.Now, From = from ?? "", OpenedIn = "(copied)", Why = "the clipboard - copied, not opened",
+                                        Asked = link, Opened = clean, Changes = changes });
+        if (Cleaned != null) Cleaned(changes);
+    }
+
+    // The program that copied it, "Signal.exe" - or the one in front, if the clipboard does not say.
+    static string CopiedFrom()
+    {
+        try
+        {
+            IntPtr w = GetClipboardOwner();
+            if (w == IntPtr.Zero) w = GetForegroundWindow();
+            uint pid;
+            if (w == IntPtr.Zero || GetWindowThreadProcessId(w, out pid) == 0) return null;
+            using (var p = System.Diagnostics.Process.GetProcessById((int)pid)) return p.ProcessName + ".exe";
+        }
+        catch { return null; }
+    }
+
+    public void Dispose() { settle.Dispose(); RemoveClipboardFormatListener(Handle); DestroyHandle(); }
+}
+
 // The Link cleaning tab: both switches, every tracking part and middleman with its own tick, parts of
 // your own, and a box to try a link and see what it becomes.
 class CleaningPage : UserControl
@@ -269,14 +416,23 @@ class CleaningPage : UserControl
         unwrap.CheckedChanged += delegate { Config.UnwrapOn = unwrap.Checked; save(); TryIt(); };
         top.Controls.Add(clean);
         top.Controls.Add(unwrap);
-        top.Controls.Add(new HelpMark(
-            "Tracking: parts added to a link to say where the click came from (utm_source, fbclid, YouTube's si...). " +
-            "The page is the same without them. Only parts known to be tracking are removed, so links keep working.\n" +
-            "Redirects: some links go through a middleman first - google.com/url?q=..., Outlook Safe Links - so it learns " +
-            "where you went. The real link is inside and is opened directly.\n" +
-            "This works on links from other programs - email, chat, documents. A link clicked inside a browser never " +
-            "reaches Browser Switch, so that needs a browser extension. Short links (bit.ly, t.co) are not followed: " +
-            "only their server knows where they lead, and Browser Switch does not go online.") { Margin = new Padding(8, 5, 0, 0) });
+        var copied = new CheckBox { Text = "Clean copied links too", AutoSize = true, Checked = Config.CopyCleanOn, Font = new Font(Font, FontStyle.Bold),
+                                    Margin = new Padding(24, 3, 3, 3) };
+        copied.CheckedChanged += delegate { Config.CopyCleanOn = copied.Checked; save(); };
+        top.Controls.Add(copied);
+        top.Controls.Add(new TabHelp("The Link cleaning tab",
+            "# Remove tracking",
+            "What goes: utm_source, fbclid, si, shops' tracking - the page is the same without them. Only known parts go.",
+            "# Skip redirects",
+            "Middlemen: google.com/url?q=… and others - the real link inside opens directly.",
+            "# Clean copied links too",
+            "When you copy: a link on its own is cleaned at once, so you paste it clean.",
+            "Left alone: text with a link inside, and what password managers copy. Win+V still shows the original.",
+            "# The two lists",
+            "Untick one: it stays in links. utm_* is every part starting utm_. Add a part… adds your own.",
+            "# Not possible",
+            "Links clicked inside a browser never reach LinkPilot. Short links (bit.ly) are not followed - it stays offline.")
+            { Margin = new Padding(10, 4, 0, 0) });
 
         // the two lists, side by side
         var lists = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
@@ -298,8 +454,7 @@ class CleaningPage : UserControl
         partButtons.Controls.Add(new Label { Text = "(only parts you added)", AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 8, 0, 0) });
         var left = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 6, 0) };
         left.Controls.Add(parts);
-        left.Controls.Add(Ui.Section("Tracking parts removed", "Untick one to leave it in links. \"On\" says which sites it is " +
-            "removed on; \"every site\" means wherever it appears. utm_* means every part whose name starts with utm_."));
+        left.Controls.Add(Ui.Section("Tracking parts removed"));
         left.Controls.Add(partButtons);
 
         redirects.Columns.Add("Redirect", 165);
@@ -308,7 +463,7 @@ class CleaningPage : UserControl
         redirects.ItemChecked += (s, e) => { if (!filling) { Toggle(Config.UnwrapOff, ((Cleaner.Redirect)e.Item.Tag).Id, e.Item.Checked); save(); TryIt(); } };
         var right = new Panel { Dock = DockStyle.Fill, Margin = new Padding(6, 0, 0, 0) };
         right.Controls.Add(redirects);
-        right.Controls.Add(Ui.Section("Redirects skipped", "Untick one to let its links go through the middleman as before."));
+        right.Controls.Add(Ui.Section("Redirects skipped"));
 
         lists.Controls.Add(left, 0, 0);
         lists.Controls.Add(right, 1, 0);
@@ -415,7 +570,7 @@ class CleaningPage : UserControl
     {
         if (parts.SelectedItems.Count == 0) return;
         var p = (Cleaner.Part)parts.SelectedItems[0].Tag;
-        if (!p.Custom) { MessageBox.Show(FindForm(), "Built-in parts cannot be removed - untick it instead.", "Browser Switch"); return; }
+        if (!p.Custom) { MessageBox.Show(FindForm(), "Built-in parts cannot be removed - untick it instead.", "LinkPilot"); return; }
         Config.CleanAdded.RemoveAll(x => string.Equals(x, p.Name + "|" + p.Sites, StringComparison.OrdinalIgnoreCase));
         Config.CleanOff.RemoveAll(x => string.Equals(x, p.Id, StringComparison.OrdinalIgnoreCase));
         save();

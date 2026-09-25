@@ -1,6 +1,6 @@
-// The part of Browser Switch that lives in the notification area next to the clock - "the dock".
+// The part of LinkPilot that lives in the notification area next to the clock - "the dock".
 //
-//   The Browser Switch icon   click: open the window. Right-click: your categories, Open, Exit.
+//   The LinkPilot icon   click: open the window. Right-click: your categories, Open, Exit.
 //   One icon per pinned category (pin it in the window): click it and links switch there, with no
 //   window and nothing else opening.
 //
@@ -52,6 +52,7 @@ class Tray : ApplicationContext
     readonly System.Windows.Forms.Timer settle = new System.Windows.Forms.Timer { Interval = 250 };
     readonly Note note = new Note();
     readonly HotkeyWindow keys = new HotkeyWindow();
+    readonly CopiedLinks copied = new CopiedLinks();       // cleans a copied link, while that is turned on
     readonly System.Windows.Forms.Timer updateClock = new System.Windows.Forms.Timer { Interval = 60 * 1000 };
     string announced;   // the newer version already mentioned, so it is said once
     readonly Dictionary<int, string> keyTargets = new Dictionary<int, string>();   // shortcut id -> category
@@ -74,6 +75,7 @@ class Tray : ApplicationContext
         Tips();
         keys.Pressed += Pressed;
         RegisterKeys();
+        copied.Cleaned += changes => note.Say("Copied link cleaned", changes, null);
         FileIcon.Update();
 
         // after an update: say which version runs now (the first run of all says nothing)
@@ -82,7 +84,7 @@ class Tray : ApplicationContext
             bool updated = Config.LastVersion.Length > 0;
             Config.LastVersion = Updater.Current;
             Config.Save();
-            if (updated) note.Say("Browser Switch updated", "Now version " + Updater.Current, null);
+            if (updated) note.Say("LinkPilot updated", "Now version " + Updater.Current, null);
         }
         // the daily question to GitHub - only if it was turned on; first a minute after starting
         updateClock.Tick += delegate { updateClock.Interval = 3600 * 1000; CheckForUpdate(); };
@@ -103,18 +105,28 @@ class Tray : ApplicationContext
         new Thread(() => { while (signal.WaitOne()) ui.BeginInvoke((MethodInvoker)OpenWindow); }) { IsBackground = true }.Start();
 
         if (openWindow) OpenWindow();
+        else
+        {
+            // the window is made (hidden) a few seconds after the dock starts, so opening it is instant
+            var later = new System.Windows.Forms.Timer { Interval = 4000 };
+            later.Tick += delegate { later.Stop(); later.Dispose(); if (window == null) { MakeWindow(); window.Prepare(); } };
+            later.Start();
+        }
+    }
+
+    void MakeWindow()
+    {
+        window = new SwitchForm();
+        window.Saved = Refresh;                          // its own changes reach the dock at once
+        window.PauseShortcuts = PauseKeys;
+        window.ShortcutFree = keys.IsFree;
+        window.ClosedByYou = SayWhereItIs;               // closing only hides it
     }
 
     void OpenWindow()
     {
-        if (window == null || window.IsDisposed)
-        {
-            window = new SwitchForm();
-            window.Saved = Refresh;                          // its own changes reach the dock at once
-            window.PauseShortcuts = PauseKeys;
-            window.ShortcutFree = keys.IsFree;
-            window.FormClosed += delegate { SayWhereItIs(); };
-        }
+        if (window == null || window.IsDisposed) MakeWindow();
+        else if (!window.Visible) window.Reopen();
         window.Show();
         if (window.WindowState == FormWindowState.Minimized) window.WindowState = FormWindowState.Normal;
         window.Activate();
@@ -132,12 +144,12 @@ class Tray : ApplicationContext
             if (Updater.UpdateWaiting && latest != announced)
             {
                 announced = latest;
-                note.Say("Browser Switch " + latest + " is available", "Right-click the dock icon - Update to " + latest, null);
+                note.Say("LinkPilot " + latest + " is available", "Right-click the dock icon - Update to " + latest, null);
             }
         });
     }
 
-    // The first time the window is closed, a note says Browser Switch is still running and where -
+    // The first time the window is closed, a note says LinkPilot is still running and where -
     // otherwise it can look as if it has gone.
     void SayWhereItIs()
     {
@@ -145,7 +157,7 @@ class Tray : ApplicationContext
         Config.ClosedOnce = true;
         Config.Save();
         using (var icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath))
-            note.Say("Browser Switch keeps running", "Its icon is next to the clock (under ^ if hidden) - click it to open the window again", icon);
+            note.Say("LinkPilot keeps running", "Its icon is next to the clock (under ^ if hidden) - click it to open the window again", icon);
     }
 
     void SwitchTo(Category c)
@@ -300,7 +312,7 @@ class Tray : ApplicationContext
     void Tips()
     {
         var live = Config.Current();
-        main.Text = Cut("Browser Switch - " + (live != null ? "links open in " + live.Name : "no category live") +
+        main.Text = Cut("LinkPilot - " + (live != null ? "links open in " + live.Name : "no category live") +
                         (!Config.RulesOn ? ", rules off" : ""));
         foreach (var n in pinned)
         {
@@ -383,7 +395,7 @@ class Tray : ApplicationContext
             menu.Items.Add(tips);
         }
         menu.Items.Add("Link log…", null, (s, e) => { OpenWindow(); window.ShowTabNamed("Link log"); });
-        menu.Items.Add("Open Browser Switch", null, (s, e) => OpenWindow());
+        menu.Items.Add("Open LinkPilot", null, (s, e) => OpenWindow());
         menu.Items.Add("Exit", null, (s, e) => Exit());
     }
 
@@ -391,11 +403,12 @@ class Tray : ApplicationContext
     {
         updateClock.Stop();
         watcher.EnableRaisingEvents = false;
-        if (window != null && !window.IsDisposed) window.Close();
+        if (window != null && !window.IsDisposed) window.Quit();
         main.Visible = false; main.Dispose();
         foreach (var n in pinned) { n.Visible = false; n.Dispose(); }
         foreach (var i in pinnedIcons) i.Dispose();
         keys.Dispose();
+        copied.Dispose();
         note.Close();
         ExitThread();
     }
@@ -619,18 +632,20 @@ class Note : Form
         using (var fill = new SolidBrush(Color.FromArgb(245, 30, 30, 34)))
         using (var ink = new SolidBrush(Color.White))
         using (var grey = new SolidBrush(Color.FromArgb(200, 200, 205)))
+        using (var edge = new Pen(Color.FromArgb(170, 255, 255, 255), 1.5F))   // a light frame, so it shows on dark screens too
         {
             g.Clear(Color.Transparent);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-            float r = 22;
-            path.AddArc(0, 0, r, r, 180, 90);
-            path.AddArc(w - r, 0, r, r, 270, 90);
-            path.AddArc(w - r, h - r, r, r, 0, 90);
-            path.AddArc(0, h - r, r, r, 90, 90);
+            float r = 22, i = edge.Width / 2;   // the frame drawn just inside the picture
+            path.AddArc(i, i, r, r, 180, 90);
+            path.AddArc(w - r - i, i, r, r, 270, 90);
+            path.AddArc(w - r - i, h - r - i, r, r, 0, 90);
+            path.AddArc(i, h - r - i, r, r, 90, 90);
             path.CloseFigure();
             g.FillPath(fill, path);
+            g.DrawPath(edge, path);
             g.DrawString(head, titleFont, ink, 16, 12);
             if (two)
             {

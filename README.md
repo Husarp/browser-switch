@@ -1,8 +1,18 @@
-# Browser Switch
+# LinkPilot
 
-Decides which browser — and which **profile** of it — every link on this computer opens in. You make
-named categories like Work, Home or School, point each at a browser profile, and switch between them
-with one click.
+Decides which browser — and which **profile** of it — every link on this computer opens in, and
+takes the tracking out of links on the way. You make named categories like Work, Home or School,
+point each at a browser profile, and switch between them with one click.
+
+*LinkPilot was called **Browser Switch** until version 4.0.0.* Installing it with the one command
+moves a copy in `Programs\Browser Switch` to `Programs\LinkPilot`, settings and all, and replaces
+its shortcuts. A few inside names keep the old one — the program file `BrowserSwitch.exe`, the
+registry entries `BrowserSwitchURL` and `BrowserSwitch` — because they are what Windows remembers
+as your default browser; renaming them would make you choose it again.
+
+There is also **LinkPilot for Android** — the same idea for a phone, with Quick Settings tiles
+and home-screen widgets to switch. It is in the [`android`](android) folder; see its
+[README](android/README.md).
 
 ## Install
 
@@ -14,27 +24,27 @@ Open **PowerShell** (press the Windows key, type `powershell`, press Enter), pas
 Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/Husarp/browser-switch/main/get.ps1 | iex
+irm https://raw.githubusercontent.com/Husarp/linkpilot/main/get.ps1 | iex
 ```
 
 That's all. It downloads the **source code** of the latest release, builds the program on your PC
 with the C# compiler that is part of Windows — so no ready-made `.exe` is downloaded, and what runs
 is exactly the code you can read here — installs it for your account only (no administrator rights),
-and opens it. Browser Switch then walks you through the one step Windows leaves to you: choosing it
+and opens it. LinkPilot then walks you through the one step Windows leaves to you: choosing it
 as your default browser. [Read the script first](get.ps1) if you like — it is short.
 
 - **Update:** run the same command again, or press *Update* in the app. Your settings are kept.
-- **Uninstall:** Settings → Apps → Installed apps → Browser Switch → Uninstall. It opens Settings on
+- **Uninstall:** Settings → Apps → Installed apps → LinkPilot → Uninstall. It opens Settings on
   the page of the browser you used before, to make that the default again with one click, then
   removes everything.
 
 ### From the files
 
-1. On the [Releases page](https://github.com/Husarp/browser-switch/releases), download
+1. On the [Releases page](https://github.com/Husarp/linkpilot/releases), download
    **`BrowserSwitch-<version>.zip`** — the ready-made program with everything needed to install and
-   remove it. (The release also has `BrowserSwitch.exe` on its own, and the source code.)
+   remove it. (The release also has `BrowserSwitch.exe` on its own, the Android app, and the source code.)
 2. Unzip it into a folder you will keep — Windows runs the program from there.
-3. Double-click **`Install.cmd`**. Browser Switch opens and walks you through the rest.
+3. Double-click **`Install.cmd`**. LinkPilot opens and walks you through the rest.
 
 The program is not signed, so Windows may say *"Windows protected your PC"* the first time — *More
 info → Run anyway*. More detail under [Setting it up](#setting-it-up).
@@ -48,8 +58,29 @@ Both end with the same `BrowserSwitch.exe` on your PC. The difference is **where
 | The program | built **on your PC** from the source code, by the compiler that is part of Windows | built by the author, downloaded ready-made |
 | What you trust | the code, which you can read here | that the download matches the code |
 | "Windows protected your PC" | no — nothing ready-made was downloaded | may appear once, as for any unsigned program |
-| Where it goes | `%LOCALAPPDATA%\Programs\Browser Switch`, for your account | any folder you choose |
+| Where it goes | `%LOCALAPPDATA%\Programs\LinkPilot`, for your account | any folder you choose |
 | Updating | the same command again, or *Update now* in the app | a new zip, or *Update now* in the app |
+
+## Install on Android
+
+Needs Android 8.0 or newer. The app is not in Google Play; it comes from the same release as the
+Windows program.
+
+1. On your phone, open the [Releases page](https://github.com/Husarp/linkpilot/releases) and
+   download **`LinkPilot-Android-<version>.apk`** (next to `BrowserSwitch.exe`).
+2. Open the downloaded file. The first time, Android asks to allow installing apps from the app you
+   opened it in (your browser or Files) — allow it, go back and tap **Install**. Google Play Protect
+   may warn about an app from an unknown developer — *More details → Install anyway*.
+3. Open **LinkPilot**. It walks you through the rest, like on Windows: your choices, then making it
+   the default browser (Android's own question — no app can do this without you).
+
+- **Update:** Home › About › **Check for updates on GitHub** opens the Releases page (the app cannot
+  go online by itself — it has no internet permission). Download the newer APK and install it over
+  the old one; your settings are kept.
+- **Uninstall:** as any app — long-press LinkPilot › App info › Uninstall. Android then asks which
+  browser should be the default again.
+
+What it does, and what differs from Windows: [LinkPilot for Android](android/README.md).
 
 ## What it does
 
@@ -61,6 +92,7 @@ Both end with the same `BrowserSwitch.exe` on your PC. The difference is **where
   to their own category, whatever is live. A ready-made list of ~175 popular apps to pick from.
 - **Link cleaning** — tracking parts (`utm_source`, `fbclid`, YouTube's `si`…) taken out of links, and
   redirects (`google.com/url?q=…`, Outlook Safe Links) skipped, so links go straight to the page.
+  If you like, a link you **copy** is cleaned too, so you paste the clean one.
 - **Link log** — every link: which app it came from, where it opened, and what was changed.
 - **Web page files** (`.htm`, `.html`) show the browser they will open in.
 - **Offline and private** — it never sends your links anywhere. It only goes online to check for a
@@ -68,7 +100,7 @@ Both end with the same `BrowserSwitch.exe` on your PC. The difference is **where
 
 ## Privacy and security
 
-**It works offline.** Browser Switch never sends your links, categories, rules or the link log
+**It works offline.** LinkPilot never sends your links, categories, rules or the link log
 anywhere, and has no account, ads, tracking or analytics. The one time it connects to the internet
 is to ask GitHub whether a newer version exists — only when you press *Check now*, or once a day if
 you allow it (off unless you turn it on, in the setup or on the *About & updates* tab) — and, when
@@ -80,9 +112,12 @@ visit to a website shows, such as your internet address. Nothing about your link
 | File | What it holds |
 |---|---|
 | `config.txt` | your categories, rules, shortcuts and settings |
-| `link-log.txt` | the link log: the newest 1000 links you opened from other programs — and so a record of sites you visited. Switch it off, or clear it, on the *Link log* tab |
+| `link-log.txt` | the link log: the newest 1000 links you opened from other programs (and copied links it cleaned, if that is on) — and so a record of sites you visited. Switch it off, or clear it, on the *Link log* tab |
 | `recent-apps.txt` | the programs that opened links lately, for app rules |
 | `file-icons\` | the icon web page files show |
+
+**What you copy** is looked at only if you turn on *Clean copied links too* — just to see whether it
+is one link on its own — and never kept; what a password manager copies is not looked at at all.
 
 **What it touches in Windows:** only your own account's part of the registry (`HKEY_CURRENT_USER`)
 — the registration that makes it a browser Windows can offer, and a Start menu, Desktop and Startup
@@ -91,7 +126,7 @@ service or driver. Uninstalling removes all of it.
 
 **What it cannot do:** make itself your default browser. Windows allows only you to choose that —
 no program and no command can — which is also what protects you from programs taking over your
-browser. Browser Switch shows you where to click.
+browser. LinkPilot shows you where to click.
 
 **What you can check:** every line of code is here. The one-command install builds the program on
 your PC from this code, so nothing ready-made is downloaded. The ready-made `.exe` in the releases is
@@ -105,7 +140,7 @@ Windows will not let a script change your default browser. The setting carries a
 your account, and anything written directly is thrown away. That protection stops programs hijacking
 your browser, and it is worth keeping.
 
-So this does not fight it. **Browser Switch becomes the default browser** and passes each link
+So this does not fight it. **LinkPilot becomes the default browser** and passes each link
 straight on to the real one, based on which category is live.
 
 Nothing was downloaded to build it. `BrowserSwitch.exe` is compiled from the `.cs` files and
@@ -113,15 +148,16 @@ Nothing was downloaded to build it. `BrowserSwitch.exe` is compiled from the `.c
 
 ## The dock
 
-Browser Switch lives in the **notification area** next to the clock — "the dock" — and starts there
+LinkPilot lives in the **notification area** next to the clock — "the dock" — and starts there
 when you sign in. While its window is open it also has a taskbar button (untick *Show a taskbar
 button* on *About & updates* to keep it in the dock only). Closing the window does not stop it — the
 first time, a note says so and where to find it.
 
-- **Click its icon** (blue square, two arrows) — the window opens. Closing the window puts it away
-  again; the icon stays.
+- **Click its icon** (blue square, two arrows) — the window opens, at once: the dock builds it
+  unseen a few seconds after it starts, and closing the window only hides it (it is brought up to
+  date each time it opens). The icon stays.
 - **Right-click it** — your categories, with a tick on the live one: click one to switch. Also
-  *Open Browser Switch* and *Exit*.
+  *Open LinkPilot* and *Exit*.
 - **Pin a category** — in the window, select it and tick **Show in dock**. It gets its own icon; one
   click on that icon switches to it, with no window. **Dock icon…** chooses what it looks like: the
   browser's own icon — for Brave, Chrome and Edge the one **with the profile's picture on it**, the
@@ -148,7 +184,7 @@ or recoloured, if yours is). It follows every switch, and the rules too, so the 
 always tells the truth about where a double-click goes.
 
 Right-click the dock icon → *Icon of .htm / .html files* to choose the look: **A web page with the
-browser's icon**, **The browser's icon** alone, or **Browser Switch's own icon**. Windows usually
+browser's icon**, **The browser's icon** alone, or **LinkPilot's own icon**. Windows usually
 redraws at once; if an open folder still shows the old icon, press F5 in it.
 
 ## Keyboard shortcuts
@@ -209,8 +245,8 @@ links to Home. In the window, the **Rules** tab.
   sync, utilities — with a search box. Tick any number, choose their category, **Add**. **Opened
   links lately** lists the programs that really opened links on this PC, and **Browse for a
   program…** takes any other.
-- **How the app is known:** when a program opens a link, Windows starts Browser Switch from inside
-  it, so Browser Switch asks Windows who started it. A few apps — mostly from the Microsoft Store —
+- **How the app is known:** when a program opens a link, Windows starts LinkPilot from inside
+  it, so LinkPilot asks Windows who started it. A few apps — mostly from the Microsoft Store —
   hand links over through a Windows go-between; their rules cannot see them, so use an address rule
   for those. *Opened links lately* shows what really opened your links.
 
@@ -224,22 +260,32 @@ takes both out before the link is handed on:
 - **Skip redirects** — 15 middlemen whose links carry the real one inside (Google search results,
   Gmail and Docs, Google Ads, Outlook and Teams Safe Links, Facebook, Messenger, Instagram, YouTube,
   Steam, LinkedIn, DuckDuckGo, VK, Slack, Reddit). The real link opens directly.
-- **Remove tracking** — about 40 known tracking parts: `utm_*`, `fbclid`, `gclid` and the other ad
-  click IDs, newsletter tracking, and on their own sites YouTube's and Spotify's `si`, Amazon's
-  search tracking, eBay's and AliExpress's. Only parts known to be tracking are removed, and
-  everything else in the link stays exactly as it was, so links keep working.
+- **Remove tracking** — 110 known tracking parts: `utm_*`, `fbclid`, `gclid` and the other ad
+  click IDs, newsletter tracking, and on their own sites YouTube's and Spotify's `si`, and the
+  **online shops'** tracking, share and affiliate parts — Amazon, eBay, AliExpress, Allegro, Temu,
+  Shein, Etsy, Walmart, Ceneo (mostly from [ClearURLs](https://clearurls.xyz)' rules). The product
+  itself stays in the link. Only parts known to be tracking are removed, and everything else in
+  the link stays exactly as it was, so links keep working.
 - Both are on to begin with; every part and middleman has its own tick, and **Add a part…** adds
   your own. **Try a link** shows what any link becomes.
+- **Clean copied links too** (off to begin with) — when you copy a link — YouTube's *Copy link*, a
+  link from a chat — the same cleaning is done to it right away, so pasting gives the clean link. A
+  short note says so, and it goes in the link log as *(copied)*. Only a copied link on its own is
+  changed: text with a link inside, several lines, and anything a password manager copies (they mark
+  it private) are left exactly as they are. What you copy is only looked at, never kept or sent.
+  Windows' clipboard history (Win+V) still shows the link as it was copied as well — Windows keeps
+  it before any program can clean it.
 
-It happens before the rules look at the link, so a rule for `github.com` also catches a Google link
-to GitHub. Two things it cannot do: a link clicked *inside* a browser never reaches Browser Switch —
+When a link you open had something taken out, a short note says so — *Link cleaned*, and what went
+— while the page opens. It happens before the rules look at the link, so a rule for `github.com` also
+catches a Google link to GitHub. Two things it cannot do: a link clicked *inside* a browser never reaches LinkPilot —
 Google's own result links included — so that needs a browser extension; and short links (`bit.ly`,
-`t.co`) are not followed, because only their server knows where they lead and Browser Switch does
+`t.co`) are not followed, because only their server knows where they lead and LinkPilot does
 not go online.
 
 ## Link log
 
-The **Link log** tab (also in the dock's right-click menu) lists every link Browser Switch handed
+The **Link log** tab (also in the dock's right-click menu) lists every link LinkPilot handed
 on: when, which app it came from, where it opened and why ("Work — rule: comes from Signal"), and
 whether it was changed. Select one to see it in full — with the link as it came, if it was changed.
 **Copy link**, **Open again**, **Clear log**. The list updates by itself as links come in.
@@ -251,17 +297,18 @@ The log stays on this computer only, in `link-log.txt` next to the program, and 
 
 On the *About & updates* tab: **Check now** asks GitHub whether a newer version exists; tick **Check
 for updates automatically** to have it asked once a day (off to begin with). When one exists, **Update
-now** downloads its source code, builds it on your PC and restarts Browser Switch, keeping your
+now** downloads its source code, builds it on your PC and restarts LinkPilot, keeping your
 settings — the same as running the install command again. See [Privacy and security](#privacy-and-security)
 for what that connection involves.
 
 ## The window
 
-Click the dock icon, or **Switch browser** on your Desktop. Wherever something needs explaining
-there is a small round **?** — point at it, or click it. While Browser Switch is not the default
+Click the dock icon, or **Switch browser** on your Desktop. Each tab has one round **ⓘ** next to its
+top heading: click it and a panel explains every part of that tab — each section by name, in short
+points; a click on the ⓘ again, or anywhere else, closes it. While LinkPilot is not the default
 browser, the window opens on the **setup screen** instead (see [Setting it up](#setting-it-up)).
 
-- **Top** — where links go right now, with the category's icon. While Browser Switch is not the
+- **Top** — where links go right now, with the category's icon. While LinkPilot is not the
   default browser it says so instead — links then go straight to the default browser (it names
   which) — and a yellow strip offers to set it up. It checks again whenever the window comes to the
   front.
@@ -284,15 +331,15 @@ To set a category up: select it on the left, select a profile on the right, pres
 | | |
 |---|---|
 | **Switch browser** (Desktop) | opens the window |
-| **Browser Switch** (Start menu) | opens the same window |
-| **Browser Switch** (Startup folder) | starts the dock when you sign in. Delete it to stop that — nothing else depends on it |
+| **LinkPilot** (Start menu) | opens the same window |
+| **LinkPilot** (Startup folder) | starts the dock when you sign in. Delete it to stop that — nothing else depends on it |
 | **Back to normal.cmd** | the panic button — every link goes to your original default browser: no category is live any more, and the rules are switched off too. Nothing is uninstalled and no category or rule is lost |
 | `config.txt` | your categories, rules and settings, in plain text. The window writes it; you can edit it by hand |
 | `file-icons\` | the icon web page files show right now — drawn after each switch; safe to delete |
 | `recent-apps.txt` | the programs that opened links lately — offered when you add app rules |
 | `link-log.txt` | the link log — the newest 1000 links; stays on this computer |
-| **Install.cmd** | double-click to register Browser Switch with Windows — runs `install.ps1` |
-| `install.ps1` | adds Browser Switch to the Windows list of browsers |
+| **Install.cmd** | double-click to register LinkPilot with Windows — runs `install.ps1` |
+| `install.ps1` | adds LinkPilot to the Windows list of browsers |
 | `uninstall.ps1` | removes it completely — after making your previous browser the default again |
 | `get.ps1` | the one-command installer and updater (see [Install](#install)) |
 | `build.cmd` | rebuilds the program |
@@ -304,7 +351,7 @@ To set a category up: select it on the left, select a profile on the right, pres
 The one command under [Install](#install) does all of this by itself. By hand:
 
 1. **Get the program**, either way:
-   - **Download** from the [Releases page](https://github.com/Husarp/browser-switch/releases) —
+   - **Download** from the [Releases page](https://github.com/Husarp/linkpilot/releases) —
      `BrowserSwitch-<version>.zip` — and unzip it
      into a folder you will keep. The program is not signed, so Windows may say *"Windows protected your PC"* the
      first time — *More info → Run anyway*.
@@ -315,19 +362,19 @@ The one command under [Install](#install) does all of this by itself. By hand:
 2. **Double-click `Install.cmd`** from File Explorer. It runs `install.ps1`, which registers Browser
    Switch and opens it. Run it yourself: registry changes made from inside some programs — AI
    coding assistants included — land in a private copy of the registry that only that program sees,
-   and Windows Settings would never see Browser Switch.
+   and Windows Settings would never see LinkPilot.
 
-Browser Switch is **not** your default browser yet after that — Windows requires you to choose it
-yourself. So Browser Switch opens on a **setup screen** — on its first start, and again whenever it
+LinkPilot is **not** your default browser yet after that — Windows requires you to choose it
+yourself. So LinkPilot opens on a **setup screen** — on its first start, and again whenever it
 is not the default browser — in three steps (Back and Skip on the left, the blue button on the right):
 
 1. **How it works** — why it has to be the default browser (every link must pass through it, and
    Windows sends links only to the default browser), and why it can be trusted: fully offline,
    sends nothing, made for personal use, open, easy to undo.
-2. **Your choices** — clean links (on), keep a log of links (on), check for updates automatically
-   (off). All can be changed later on their tabs.
-3. **Make it your default browser** — *Open Windows Settings* opens on Browser Switch's own page;
-   press *Set default*; the setup screen notices by itself. If Browser Switch already is the
+2. **Your choices** — clean links (on), clean copied links too (off), keep a log of links (on),
+   check for updates automatically (off). All can be changed later on their tabs.
+3. **Make it your default browser** — *Open Windows Settings* opens on LinkPilot's own page;
+   press *Set default*; the setup screen notices by itself. If LinkPilot already is the
    default, this step just says so.
 
 Then a big **You're all set!** — and if you have no category yet, the browser you used until now
@@ -338,15 +385,15 @@ becomes the first one, live (for example **Firefox**), so links keep going exact
 
 By hand, in Settings → Apps → Default apps there are two ways:
 
-- **By app** — under *Set defaults for applications*, find **Browser Switch** (blue square, two
+- **By app** — under *Set defaults for applications*, find **LinkPilot** (blue square, two
   arrows), open it, press **Set default**.
 - **By link type** — in the top box, *Set a default for a file type or link type*, type `HTTP`, click
-  the app shown under it, and choose **Browser Switch**. Then the same for `HTTPS`.
+  the app shown under it, and choose **LinkPilot**. Then the same for `HTTPS`.
 
 Until you do, nothing changes. If you skip the setup screen, the window says so across the top in
 yellow, and its *Set it up* button brings the setup screen back.
 
-**If Browser Switch is not offered:** double-click `Install.cmd` again — yourself, not from inside
+**If LinkPilot is not offered:** double-click `Install.cmd` again — yourself, not from inside
 another program — then close Settings completely (clicking the X only hides it) and open it again.
 What `install.ps1` sets up, and why:
 
@@ -369,9 +416,9 @@ and `--dry` reports exactly what a real click would do, so the two can never dis
 1. *(while rules are on)* the first ticked rule that matches, if its category's browser
    still exists;
 2. the live category, if its browser still exists;
-3. otherwise the browser that was your default **before** Browser Switch was installed — recorded at
+3. otherwise the browser that was your default **before** LinkPilot was installed — recorded at
    install time, so a machine with nothing set up behaves exactly as it did before (installed again
-   or moved while Browser Switch already is the default, it is taken over from the copy installed
+   or moved while LinkPilot already is the default, it is taken over from the copy installed
    before);
 4. otherwise the first browser Windows lists.
 
@@ -383,8 +430,8 @@ Two levels of undo, on purpose:
 
 - **Pause** — `Back to normal.cmd`. Instant, nothing removed; pick a category and tick *Use rules*
   to switch back on.
-- **Remove** — Settings → Apps → Installed apps → Browser Switch, or run `uninstall.ps1`. While
-  Browser Switch is the default browser, it first opens Settings on the page of the browser you used
+- **Remove** — Settings → Apps → Installed apps → LinkPilot, or run `uninstall.ps1`. While
+  LinkPilot is the default browser, it first opens Settings on the page of the browser you used
   before — one click on *Set default* (Windows lets no program do that click) — waits for it, and
   then removes everything, so Windows is never left pointing at something that no longer exists.
   Every registry key it created lives under your own user account and is deleted.

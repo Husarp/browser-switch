@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.LinkPilot" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- For the parts that only hand a link on: nothing shows, unless a browser has to be asked for. -->
+    <style name="Theme.LinkPilot.Invisible" parent="android:Theme.Translucent.NoTitleBar" />
+</resources>

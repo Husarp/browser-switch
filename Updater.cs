@@ -1,6 +1,6 @@
-// Updates: the only time Browser Switch goes online.
+// Updates: the only time LinkPilot goes online.
 //
-// It asks GitHub one question - "what is the newest release of Husarp/browser-switch?" - and nothing
+// It asks GitHub one question - "what is the newest release of Husarp/linkpilot?" - and nothing
 // is sent with it except what every web request carries. It asks when you press Check now, and once
 // a day on its own only if you turn that on (off to begin with). Updating runs get.ps1, the same
 // one-command installer: it downloads the new version's source code from GitHub and builds it here.
@@ -16,7 +16,7 @@ using System.Windows.Forms;
 
 static class Updater
 {
-    public const string Repo = "Husarp/browser-switch";
+    public const string Repo = "Husarp/linkpilot";
     public static string Latest;   // the newest version GitHub reported since the program started, or null
 
     public static string Current
@@ -110,14 +110,14 @@ class AboutPage : UserControl
         AutoScroll = true;
 
         var column = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Location = new Point(18, 14) };
-        column.Controls.Add(new Label { Text = "Browser Switch " + Updater.Current, AutoSize = true, Font = new Font("Segoe UI", 14F, FontStyle.Bold) });
+        column.Controls.Add(new Label { Text = "LinkPilot " + Updater.Current, AutoSize = true, Font = new Font("Segoe UI", 14F, FontStyle.Bold) });
         column.Controls.Add(new Label { Text = "Decides which browser - and which profile - every link opens in.", AutoSize = true,
                                         ForeColor = SystemColors.GrayText, Margin = new Padding(3, 0, 3, 14) });
 
         // what offline means
         column.Controls.Add(new Label { Text = "Works offline", AutoSize = true, Font = new Font("Segoe UI", 10.5F, FontStyle.Bold) });
         column.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(640, 0), Margin = new Padding(3, 2, 3, 14),
-            Text = "Your links, categories, rules and the link log never leave this computer. The only time Browser Switch " +
+            Text = "Your links, categories, rules and the link log never leave this computer. The only time LinkPilot " +
                    "connects to the internet is to ask GitHub (github.com) whether a newer version exists - when you press " +
                    "Check now, or once a day if you allow it below - and, when you press Update now, to download the new " +
                    "version's source code, which is then built on this PC. Nothing about your links or settings is sent; " +
@@ -157,14 +157,14 @@ class AboutPage : UserControl
         };
         column.Controls.Add(taskbar);
         column.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(640, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(3, 0, 3, 14),
-            Text = "Either way Browser Switch keeps running next to the clock after the window is closed - click its icon there " +
+            Text = "Either way LinkPilot keeps running next to the clock after the window is closed - click its icon there " +
                    "(under the ^ arrow, if Windows has hidden it) to open this window again." });
 
         // more
         column.Controls.Add(new Label { Text = "More", AutoSize = true, Font = new Font("Segoe UI", 10.5F, FontStyle.Bold) });
         var setup = new LinkLabel { Text = "Show the setup screen again", AutoSize = true, Margin = new Padding(3, 6, 3, 3) };
         setup.LinkClicked += delegate { showSetup(); };
-        var code = new LinkLabel { Text = "Browser Switch on GitHub - the code, releases, and where to report a problem", AutoSize = true };
+        var code = new LinkLabel { Text = "LinkPilot on GitHub - the code, releases, and where to report a problem", AutoSize = true };
         code.LinkClicked += delegate { try { Process.Start("https://github.com/" + Updater.Repo); } catch { } };
         column.Controls.Add(setup);
         column.Controls.Add(code);
@@ -194,7 +194,7 @@ class AboutPage : UserControl
         {
             update.Text = "Update now to " + Updater.Latest;
             status.ForeColor = Color.SeaGreen;
-            status.Text = "Browser Switch " + Updater.Latest + " is available - you have " + Updater.Current + ".";
+            status.Text = "LinkPilot " + Updater.Latest + " is available - you have " + Updater.Current + ".";
         }
         else if (latest != null)
         {
@@ -210,10 +210,10 @@ class AboutPage : UserControl
 
     void RunUpdate()
     {
-        if (MessageBox.Show(FindForm(), "Update Browser Switch to " + Updater.Latest + "?\n\nA window shows what it does: it downloads the new version's " +
+        if (MessageBox.Show(FindForm(), "Update LinkPilot to " + Updater.Latest + "?\n\nA window shows what it does: it downloads the new version's " +
                             "source code from GitHub, builds it on this PC and starts it again. Your settings stay.",
-                            "Browser Switch", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+                            "LinkPilot", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
         string problem = Updater.StartUpdate();
-        if (problem != null) MessageBox.Show(FindForm(), problem, "Browser Switch", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (problem != null) MessageBox.Show(FindForm(), problem, "LinkPilot", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 }

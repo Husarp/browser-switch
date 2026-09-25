@@ -206,26 +206,28 @@ class ShortcutsPage : UserControl
         on.CheckedChanged += delegate { Config.ShortcutsOn = on.Checked; save(); UpdateLines(); };
         var top = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(3, 0, 3, 14) };
         top.Controls.Add(on);
-        top.Controls.Add(new HelpMark("These work anywhere, as long as Browser Switch is in the dock. Suggested keys " +
-            "are filled in already - tick this and they work.\nEach can be changed, switched off on its own, or " +
-            "Reset to its suggestion."));
+        top.Controls.Add(new TabHelp("The Shortcuts tab",
+            "# Keyboard shortcuts",
+            "Anywhere: they work in every program while LinkPilot is in the dock.",
+            "Suggested keys: filled in - tick Turn on. Change, untick or Reset each one.",
+            "# Shortcut",
+            "Change it: click the box and press any key or combination - media keys and F13-F24 too.",
+            "A keyboard button shows nothing: give it F13-F24 in the keyboard's own software (Logi Options+).",
+            "# In next / previous",
+            "Ticked: Next and Previous step through these categories only.",
+            "# Status",
+            "Says: ready, taken by another program, used twice, or types a character.",
+            "Types a character: allowed, but that character can't be typed while the shortcut is on - e.g. on a Polish keyboard Ctrl+Alt+A is AltGr+A, so typing ą would switch browsers instead.") { Margin = new Padding(6, 0, 0, 0) });
         table.Controls.Add(top, 0, row);
         table.SetColumnSpan(top, 6);
         row++;
 
-        table.Controls.Add(Ui.Caption("Active", "Ticked: this shortcut is in use. Unticked: its keys are kept, but " +
-                                      "pressing them does nothing, and other programs can use them again."), 0, row);
-        table.Controls.Add(Ui.Caption("Shortcut", "Click a box and press what you want: any key, alone or with Ctrl, Alt, " +
-            "Shift or Win - media keys, F13-F24 and launch keys too. Clear empties it.\nA keyboard button that shows " +
-            "nothing here is handled by the keyboard's own software. Give it a keystroke there - F13 to F24 are " +
-            "ideal, no keyboard has them - for example in Logi Options+, then press it here."), 1, row);
-        var cycleCaption = Ui.Caption("In next / previous", "Next and Previous step through the ticked categories only. " +
-                                      "A category's own shortcut works either way.");
-        cycleCaption.Margin = new Padding(8, 0, 8, 2);
+        table.Controls.Add(Ui.Caption("Active"), 0, row);
+        table.Controls.Add(Ui.Caption("Shortcut"), 1, row);
+        var cycleCaption = Ui.Caption("In next / previous");
+        cycleCaption.Margin = new Padding(8, 2, 8, 2);
         table.Controls.Add(cycleCaption, 4, row);
-        table.Controls.Add(Ui.Caption("Status", "Whether each shortcut will work: ready; taken by another program; used " +
-            "twice here; or types a character - a plain K types k, so while it is a shortcut you could not type k. " +
-            "That is allowed; it is your choice.\nOn Polish and many other keyboards Ctrl+Alt is AltGr: Ctrl+Alt+A types ą."), 5, row);
+        table.Controls.Add(Ui.Caption("Status"), 5, row);
         row++;
 
         foreach (var c in Config.Categories)

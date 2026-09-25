@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LinkPilot</string>
+    <string name="share_label">Copy clean link</string>
+    <string name="tile_next">Next browser</string>
+    <string name="tile_choose">Choose browser</string>
+    <string name="tile_clean">Clean copied link</string>
+    <string name="copy_watch_description">Cleans a link as soon as you copy it - when "Clean copied links automatically" is on in LinkPilot. It listens only to the system\'s own "copied" preview, never to other apps, and reads what you copied only to see if it is a link. Nothing is kept or sent anywhere: LinkPilot cannot go online.</string>
+    <string name="widget_next_description">Each tap makes the next category live</string>
+    <string name="widget_choose_description">A tap shows the list of categories</string>
+</resources>

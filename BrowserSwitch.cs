@@ -1,8 +1,8 @@
-// Browser Switch - decides which browser, and which profile of it, every link opens in.
+// LinkPilot - decides which browser, and which profile of it, every link opens in.
 //
 // Windows will not let a script change your default browser: the setting carries a signature tied to
 // your account, and anything written directly is thrown away. That protection stops browser
-// hijacking and is worth keeping. So this does not fight it. Browser Switch IS the default browser,
+// hijacking and is worth keeping. So this does not fight it. LinkPilot IS the default browser,
 // and it forwards each link to the real one.
 //
 // You set up named categories - Work, Home, School, whatever you like - and point each at a browser
@@ -33,12 +33,12 @@ using Microsoft.Win32;
 // The name, publisher and version Windows reads out of the exe itself - for Settings > Default apps,
 // "Open with", Task Manager. Without these the exe's description is a single blank space, so Windows
 // had nothing to call this program but "BrowserSwitch.exe".
-[assembly: System.Reflection.AssemblyTitle("Browser Switch")]
-[assembly: System.Reflection.AssemblyProduct("Browser Switch")]
-[assembly: System.Reflection.AssemblyCompany("Browser Switch")]
+[assembly: System.Reflection.AssemblyTitle("LinkPilot")]
+[assembly: System.Reflection.AssemblyProduct("LinkPilot")]
+[assembly: System.Reflection.AssemblyCompany("LinkPilot")]
 [assembly: System.Reflection.AssemblyDescription("Sends each link to the browser and profile you chose")]
-[assembly: System.Reflection.AssemblyVersion("3.12.6.0")]
-[assembly: System.Reflection.AssemblyFileVersion("3.12.6.0")]
+[assembly: System.Reflection.AssemblyVersion("4.2.4.0")]
+[assembly: System.Reflection.AssemblyFileVersion("4.2.4.0")]
 
 // ---- what we know about the machine ------------------------------------------------------------
 
@@ -270,7 +270,7 @@ static class Config
 
     public static List<Category> Categories = new List<Category>();
     public static string Active = "";
-    // The browser links went to before Browser Switch existed. Written at install time so that a
+    // The browser links went to before LinkPilot existed. Written at install time so that a
     // machine with nothing set up yet behaves exactly as it did before, instead of picking one.
     public static string FallbackExe = "";
     // Keyboard shortcuts: off until turned on in the window. The keys below are filled in anyway,
@@ -291,6 +291,8 @@ static class Config
     // Link cleaning (Cleaner.cs): tracking parts removed, redirects skipped - both on to begin with.
     // The lists hold what you switched off, and the tracking parts you added ("name|sites").
     public static bool CleanOn = true, UnwrapOn = true;
+    // Copied links cleaned on the clipboard too (CopiedLinks in Cleaner.cs) - off until turned on.
+    public static bool CopyCleanOn;
     // The link log (LinkLog.cs), kept on this PC only.
     public static bool LogOn = true;
     // Updates (Updater.cs): asking GitHub once a day is off until turned on. LastVersion is the
@@ -299,10 +301,10 @@ static class Config
     public static DateTime UpdateChecked = DateTime.MinValue;
     public static string LastVersion = "";
     // A taskbar button while the window is open (off: the window lives only in the dock), and
-    // whether the note saying where Browser Switch keeps running has been shown once.
+    // whether the note saying where LinkPilot keeps running has been shown once.
     public static bool TaskbarButton = true, ClosedOnce;
     // The setup screen has been seen (Finish or Skip). Until then the window opens on it, even if
-    // Browser Switch is the default browser already; afterwards only while it is not.
+    // LinkPilot is the default browser already; afterwards only while it is not.
     public static bool SetupDone;
     public static List<string> CleanOff = new List<string>(), UnwrapOff = new List<string>(), CleanAdded = new List<string>();
     // What .htm / .html files look like in File Explorer (FileIcon.cs): "page", "browser" or "own".
@@ -328,6 +330,7 @@ static class Config
     //     log=on                                   (keep a log of links, link-log.txt; LinkLog.cs)
     //     clean=on                                 (remove tracking parts from links; Cleaner.cs)
     //     unwrap=on                                (skip redirects such as google.com/url?q=...)
+    //     clean-copied=off                         ("on": clean a link when it is copied, too)
     //     clean-off=si@youtube.com youtu.be open.spotify.com    (one line per part switched off)
     //     unwrap-off=google.*/url                  (one line per redirect switched off)
     //     clean-add=ref|example.com                (a part of your own, and where; empty = everywhere)
@@ -352,7 +355,7 @@ static class Config
         Categories.Clear(); Active = ""; FallbackExe = ""; ShortcutsOn = false; NextKey = ""; PrevKey = ""; TipSwitchTo = false;
         NextDefault = ""; PrevDefault = ""; NextOn = true; PrevOn = true; RulesOn = true; Rules.Clear();
         RulesKey = ""; RulesDefault = ""; RulesKeyOn = true; FileIconStyle = "page";
-        CleanOn = true; UnwrapOn = true; CleanOff.Clear(); UnwrapOff.Clear(); CleanAdded.Clear(); LogOn = true;
+        CleanOn = true; UnwrapOn = true; CopyCleanOn = false; CleanOff.Clear(); UnwrapOff.Clear(); CleanAdded.Clear(); LogOn = true;
         UpdateCheck = false; UpdateChecked = DateTime.MinValue; LastVersion = ""; TaskbarButton = true; ClosedOnce = false; SetupDone = false;
         LastText = text;
         bool keysSeen = false, nextDefaultSeen = false, prevDefaultSeen = false, rulesKeySeen = false, setupSeen = false;
@@ -391,6 +394,7 @@ static class Config
             if (line.StartsWith("log=", StringComparison.OrdinalIgnoreCase)) { LogOn = line.Substring(4).Trim().ToLowerInvariant() != "off"; continue; }
             if (line.StartsWith("clean=", StringComparison.OrdinalIgnoreCase)) { CleanOn = line.Substring(6).Trim().ToLowerInvariant() != "off"; continue; }
             if (line.StartsWith("unwrap=", StringComparison.OrdinalIgnoreCase)) { UnwrapOn = line.Substring(7).Trim().ToLowerInvariant() != "off"; continue; }
+            if (line.StartsWith("clean-copied=", StringComparison.OrdinalIgnoreCase)) { CopyCleanOn = line.Substring(13).Trim().ToLowerInvariant() == "on"; continue; }
             if (line.StartsWith("clean-off=", StringComparison.OrdinalIgnoreCase)) { CleanOff.Add(line.Substring(10).Trim()); continue; }
             if (line.StartsWith("unwrap-off=", StringComparison.OrdinalIgnoreCase)) { UnwrapOff.Add(line.Substring(11).Trim()); continue; }
             if (line.StartsWith("clean-add=", StringComparison.OrdinalIgnoreCase)) { CleanAdded.Add(line.Substring(10).Trim()); continue; }
@@ -508,7 +512,7 @@ static class Config
     public static void Save()
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# Browser Switch. Edit by hand if you like - the window writes the same thing.");
+        sb.AppendLine("# LinkPilot. Edit by hand if you like - the window writes the same thing.");
         sb.AppendLine("# category=<name>|<browser exe>|<profile arguments>|<what to show>|<in dock: 1>|<dock icon>|<shortcut>");
         sb.AppendLine();
         sb.AppendLine("active=" + Active);
@@ -532,6 +536,7 @@ static class Config
         sb.AppendLine("log=" + (LogOn ? "on" : "off"));
         sb.AppendLine("clean=" + (CleanOn ? "on" : "off"));
         sb.AppendLine("unwrap=" + (UnwrapOn ? "on" : "off"));
+        sb.AppendLine("clean-copied=" + (CopyCleanOn ? "on" : "off"));
         foreach (var x in CleanOff) sb.AppendLine("clean-off=" + x);
         foreach (var x in UnwrapOff) sb.AppendLine("unwrap-off=" + x);
         foreach (var x in CleanAdded) sb.AppendLine("clean-add=" + x);
@@ -652,8 +657,9 @@ static class Program
                     string.Join(", ", Config.Rules.Select(r => r.Describe() + " -> " + r.Category + (r.On ? "" : " (off)"))) : ""));
                 sb.AppendLine("link cleaning:     tracking " + (Config.CleanOn ? "on" : "off") + " (" +
                     Cleaner.Parts().Count(Cleaner.IsOn) + " of " + Cleaner.Parts().Count() + " parts), redirects " +
-                    (Config.UnwrapOn ? "on" : "off") + " (" + Cleaner.Redirects.Count(Cleaner.IsOn) + " of " + Cleaner.Redirects.Count + ")");
-                sb.AppendLine("updates:           " + (Config.UpdateCheck ? "checked once a day" : "off - checked only when asked") +
+                    (Config.UnwrapOn ? "on" : "off") + " (" + Cleaner.Redirects.Count(Cleaner.IsOn) + " of " + Cleaner.Redirects.Count + ")" +
+                    ", copied links " + (Config.CopyCleanOn ? "on" : "off"));
+                sb.AppendLine("updates:          " + (Config.UpdateCheck ? "checked once a day" : "off - checked only when asked") +
                     (Config.UpdateChecked != DateTime.MinValue ? ", last " + Config.UpdateChecked.ToString("yyyy-MM-dd HH:mm") : ""));
                 sb.AppendLine("link log:          " + (Config.LogOn ? "on" : "off") + " - " + LinkLog.Read().Count + " links kept");
                 sb.AppendLine("rules on/off key:  " + (Config.RulesKey.Length > 0 ? Config.RulesKey : "(none)") + (Config.RulesKeyOn ? "" : " (off)"));
@@ -711,8 +717,8 @@ static class Program
                 catch { }
             }
             else if (args.Length == 0)
-                MessageBox.Show("Browser Switch could not start.\r\n\r\nWhat went wrong is written in errors.log, in\r\n" + Config.Dir,
-                                "Browser Switch", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("LinkPilot could not start.\r\n\r\nWhat went wrong is written in errors.log, in\r\n" + Config.Dir,
+                                "LinkPilot", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return 1;
         }
     }
@@ -765,7 +771,7 @@ static class Program
         return b != null ? b.Name : Path.GetFileNameWithoutExtension(exe);
     }
 
-    // The browser that was the default before Browser Switch, by the name Windows gives it.
+    // The browser that was the default before LinkPilot, by the name Windows gives it.
     public static string OriginalBrowserName()
     {
         string exe = Config.FallbackExe;
@@ -778,7 +784,8 @@ static class Program
         return b != null ? b.Name : Path.GetFileNameWithoutExtension(exe);
     }
 
-    // A link sent by a rule shows no note: the live category has not changed.
+    // A link sent by a rule shows no note: the live category has not changed. A link that was
+    // cleaned does - "Link cleaned", and what was taken out - once it is on its way.
     public static void Open(string url)
     {
         string exe, extra, why;
@@ -791,6 +798,18 @@ static class Program
         LinkLog.Add(new LinkLog.Entry { When = DateTime.Now, From = source ?? "", Asked = asked, Opened = url, Changes = changes,
                                         Why = why, OpenedIn = chosen != null ? chosen.Name : BrowserName(exe) });
         if (exe.Length > 0) Launch(exe, extra, url);
+        if (changes.Length > 0) SayCleaned(changes);
+    }
+
+    // The note is shown by this short-lived copy itself; it stays only until the note has faded.
+    static void SayCleaned(string changes)
+    {
+        using (var note = new Note())
+        {
+            note.VisibleChanged += delegate { if (!note.Visible) Application.ExitThread(); };
+            note.Say("Link cleaned", changes, null);
+            Application.Run();
+        }
     }
 
     public static void Launch(string exe, string profileArgs, string url)

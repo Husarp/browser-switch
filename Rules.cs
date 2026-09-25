@@ -2,8 +2,8 @@
 // (github.com -> Home). Rules win over the live category: the first rule that matches decides, and a
 // link no rule matches goes to the live category as before.
 //
-// The app is known because Windows starts Browser Switch from inside the program that opened the
-// link, so that program is Browser Switch's parent process. A few programs - mostly Store apps - hand
+// The app is known because Windows starts LinkPilot from inside the program that opened the
+// link, so that program is LinkPilot's parent process. A few programs - mostly Store apps - hand
 // links over through a Windows go-between, and then the go-between is all that can be seen.
 
 using System;
@@ -240,10 +240,16 @@ class RulesPage : UserControl
         use.CheckedChanged += delegate { Config.RulesOn = use.Checked; save(); };
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 36, Padding = new Padding(10, 9, 10, 0), WrapContents = false };
         top.Controls.Add(use);
-        top.Controls.Add(new HelpMark("A link that matches a rule goes to that rule's category, whatever is live. " +
-            "The first rule that matches decides - use Move up / Move down. A link that matches none goes to the live " +
-            "category.\nUntick a rule to keep it but not use it; untick Use rules for all of them - also in the " +
-            "dock's right-click menu, and on a keyboard shortcut."));
+        top.Controls.Add(new TabHelp("The Rules tab",
+            "# Rules",
+            "Which wins: a matching rule beats the live category; the first match decides (Move up / down).",
+            "No match: the link goes to the live category.",
+            "Off: untick one rule, or Use rules for all - also in the dock menu and on a shortcut.",
+            "# App rules",
+            "Known by: the program file. Store apps may hide behind Windows - use an address rule for those.",
+            "Opened links lately: in Add apps…, what really opened your links.",
+            "# Address rules",
+            "github.com: also covers gist.github.com. With a / it is looked for anywhere in the link.") { Margin = new Padding(6, 1, 0, 0) });
 
         list.Columns.Add("When a link…", 270);
         list.Columns.Add("goes to", -2);                   // -2: fills the rest of the width
@@ -258,13 +264,6 @@ class RulesPage : UserControl
         side.Controls.Add(SideButton("Remove", delegate { Remove(); }));
         side.Controls.Add(SideButton("Move up", delegate { MoveRule(-1); }));
         side.Controls.Add(SideButton("Move down", delegate { MoveRule(1); }));
-        var why = Ui.Caption("App not matching?", null);
-        why.Margin = new Padding(3, 12, 0, 0);
-        why.Controls.Add(new HelpMark("Apps are recognised by their program file - the list has the usual ones. " +
-            "A few apps, mostly from the Microsoft Store, hand links over through a Windows go-between; a rule for " +
-            "such an app cannot see it, so use an address rule for those.\n\"Opened links lately\" in the app list shows " +
-            "what really opened your links.") { Size = new Size(17, 17), Margin = new Padding(4, 0, 0, 0) });
-        side.Controls.Add(why);
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42, Padding = new Padding(8, 6, 8, 4) };
         bottom.Controls.Add(new Label { Text = "Selected rule sends links to:", AutoSize = true, Margin = new Padding(3, 7, 3, 3) });
@@ -366,9 +365,9 @@ class RulesPage : UserControl
                                   ShowInTaskbar = false, Font = Font })
         {
             var ask = new Label { Text = "Links whose address has:", Left = 14, Top = 16, AutoSize = true };
-            var hint = new HelpMark("A site like github.com also covers the sites under it (gist.github.com, " +
-                "www.github.com).\nText with a / in it, like github.com/my-company, is looked for anywhere in the link.")
-                       { Left = 164, Top = 17 };
+            var hint = new TabHelp("Links to an address",
+                "Sites under it: github.com also covers gist.github.com and www.github.com.",
+                "With a /: github.com/my-company is looked for anywhere in the link.") { Left = 164, Top = 14 };
             var box = new TextBox { Left = 14, Top = 40, Width = 390 };
             var to = new Label { Text = "go to:", Left = 14, Top = 84, AutoSize = true };
             var cat = new ComboBox { Left = 60, Top = 80, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -423,11 +422,14 @@ class AppPicker : Form
 
         var searchRow = new Panel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(8, 6, 8, 4) };
         searchRow.Controls.Add(search);
-        var helpHolder = new Panel { Dock = DockStyle.Right, Width = 26 };   // keeps the "?" round, not stretched
-        helpHolder.Controls.Add(new HelpMark("Search, or pick a group on the left. Tick as many apps as you like - the " +
-            "ticks stay while you search and switch groups - then choose where their links go and press Add.\n" +
-            "\"Opened links lately\" lists the programs that really opened links on this PC, so an app missing from the " +
-            "list can still be added. Not there either? Browse for a program…") { Left = 8, Top = 3 });
+        var helpHolder = new Panel { Dock = DockStyle.Right, Width = 30 };   // keeps the (i) round, not stretched
+        helpHolder.Controls.Add(new TabHelp("Adding apps",
+            "Finding them: search, or pick a group on the left.",
+            "Several at once: tick as many as you like - the ticks stay while you search and switch groups - then " +
+                "choose where their links go and press Add.",
+            "Opened links lately: the programs that really opened links on this PC, so an app missing from the list " +
+                "can still be added.",
+            "Not there either: use Browse for a program….") { Left = 8, Top = 1 });
         searchRow.Controls.Add(helpHolder);
         search.HandleCreated += delegate { SendMessage(search.Handle, 0x1501, (IntPtr)1, "Search apps…"); };   // grey hint text
         search.TextChanged += delegate { Fill(); };

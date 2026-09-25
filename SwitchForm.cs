@@ -1,10 +1,10 @@
-﻿// The window you get when you click Browser Switch.
+﻿// The window you get when you click LinkPilot.
 //
 // Top    - what links open in right now.
 // Tabs   - Categories: your categories on the left, every browser and its profiles on the right.
 //          Rules (Rules.cs), Shortcuts (Shortcuts.cs), and the rest.
 // Bottom - one button per category: click it and links go there from that moment on.
-// Explanations sit behind the small "?" marks (Ui.cs). Until Browser Switch is the default browser,
+// Each tab has one round (i) that explains all of it (Ui.cs). Until LinkPilot is the default browser,
 // the setup screen (Setup.cs) shows instead.
 
 using System;
@@ -16,7 +16,7 @@ using System.Windows.Forms;
 
 partial class SwitchForm : Form
 {
-    readonly List<Browser> browsers = Machine.Browsers();
+    List<Browser> browsers = Machine.Browsers();
     Label header, caption;
     PictureBox headerIcon;
     ListBox categoryList;
@@ -42,7 +42,7 @@ partial class SwitchForm : Form
 
     public SwitchForm()
     {
-        Text = "Browser Switch";
+        Text = "LinkPilot";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         ShowInTaskbar = Config.TaskbarButton;   // a taskbar button while open, unless set to live in the dock only
         Activated += delegate { CheckDefault(); };   // Settings may have changed the default browser meanwhile
@@ -74,18 +74,21 @@ partial class SwitchForm : Form
         inDock.CheckedChanged += delegate { if (!filling) SetInDock(inDock.Checked); };
         iconButton = Button_("Dock icon…", delegate { PickIcon(); });
         iconPreview = new PictureBox { Size = new Size(24, 24), SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(6, 5, 0, 0) };
-        var dockHelp = new HelpMark("Show in dock puts this category's own icon next to the clock. One click on that icon " +
-                                    "switches to it - no window needed.\nDock icon… chooses what the icon looks like: the " +
-                                    "browser's own icon, that icon recoloured, a colour with a letter, or an image file.")
-                       { Margin = new Padding(8, 8, 0, 0) };
         var dockRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(0, 2, 0, 0), WrapContents = false };
-        dockRow.Controls.AddRange(new Control[] { inDock, iconButton, iconPreview, dockHelp });
+        dockRow.Controls.AddRange(new Control[] { inDock, iconButton, iconPreview });
 
         split.Panel1.Controls.Add(categoryList);
-        split.Panel1.Controls.Add(Ui.Section("Categories",
-            "A category is a name - Work, Home, School - with a browser and profile. Links open in the live one, " +
-            "marked LIVE.\nTo set one up: select it here, pick a profile on the right, press Use this.\n" +
-            "Double-click a category to make it live."));
+        split.Panel1.Controls.Add(Ui.Section("Categories", new TabHelp("The Categories tab",
+            "# Categories",
+            "A category: a name - Work, Home - with a browser and profile. Links open in the live one (LIVE).",
+            "Set one up: select it, pick a profile on the right, press Use this.",
+            "Make it live: double-click it, or click it under Switch to at the bottom.",
+            "# Browsers and profiles",
+            "Listed: every browser on this PC with its profiles, named as you named them.",
+            "# Show in dock",
+            "In the dock: its own icon next to the clock - one click switches. Dock icon… picks the look.",
+            "# The yellow strip",
+            "Not switched on yet: LinkPilot is not your default browser, so links skip it. Set it up shows where.")));
         split.Panel1.Controls.Add(leftButtons);
         split.Panel1.Controls.Add(dockRow);
 
@@ -100,9 +103,7 @@ partial class SwitchForm : Form
         rightButtons.Controls.Add(assign);
 
         split.Panel2.Controls.Add(browserTree);
-        split.Panel2.Controls.Add(Ui.Section("Browsers and profiles",
-            "Every browser on this computer, with its profiles underneath - read from the browsers themselves, " +
-            "so the names are the ones you gave them.\nSelect a profile, then Use this - or double-click it."));
+        split.Panel2.Controls.Add(Ui.Section("Browsers and profiles"));
         split.Panel2.Controls.Add(rightButtons);
 
         // ---- bottom: one button per category, and the extra settings ----
@@ -122,6 +123,17 @@ partial class SwitchForm : Form
         tabs.TabPages.AddRange(new[] { categoriesPage, rulesPage, shortcutsPage, cleaningPage, logPage, aboutPage });
         tabs.SelectedIndexChanged += delegate { ShowTab(); };
         FormClosed += delegate { PauseKeys(false); };
+        // Closing it only hides it: built once, it opens again at once (Reopen). It really closes only
+        // when LinkPilot exits (Quit) or Windows shuts down.
+        FormClosing += (s, e) =>
+        {
+            if (quitting || e.CloseReason != CloseReason.UserClosing) return;
+            e.Cancel = true;
+            Hide();
+            PauseKeys(false);
+            setupWatch.Stop();
+            if (ClosedByYou != null) ClosedByYou();
+        };
 
         var top = Header();
         warning = NotDefaultWarning();
@@ -144,6 +156,48 @@ partial class SwitchForm : Form
         FillBrowsers();
         Reload();
         if (!IsDefaultBrowser || !Config.SetupDone) ShowSetup();
+        Shown += delegate { BuildTheRestQuietly(); };
+    }
+
+    public Action ClosedByYou;   // the dock says where LinkPilot keeps running, the first time
+    bool quitting, quietStarted;
+
+    public void Quit() { quitting = true; Close(); }
+
+    // Done by the dock a few seconds after it starts, while nobody is looking: the window's own
+    // windows made and every tab built, so even the first opening is instant.
+    public void Prepare()
+    {
+        MakeReal(this);
+        BuildTheRestQuietly();
+    }
+
+    // Shown again after being hidden: brought up to date - quickly, since everything is built. The tab
+    // on screen is built again only if the settings changed meanwhile; the browser list only if a
+    // browser or profile came or went.
+    public void Reopen()
+    {
+        Reload();
+        // as a newly made window would: the setup screen from its start, or the main screen
+        if (!IsDefaultBrowser || !Config.SetupDone) ShowSetup();
+        else if (setup != null && setup.Visible) LeaveSetup();
+        CheckDefault();
+        ShowTab();
+        BeginInvoke((MethodInvoker)RefreshBrowsers);
+    }
+
+    void RefreshBrowsers()
+    {
+        var now = Machine.Browsers();
+        if (Shape(now) == Shape(browsers)) return;
+        browsers = now;
+        FillBrowsers();
+        UpdateButtons();
+    }
+
+    static string Shape(List<Browser> list)
+    {
+        return string.Join("|", list.Select(b => b.Exe + ":" + string.Join(",", b.Profiles.Select(p => p.Name + "=" + p.Args))));
     }
 
     // The top: where links go right now.
@@ -162,7 +216,7 @@ partial class SwitchForm : Form
     }
 
 
-    // Everything in this window is ignored by Windows until Browser Switch is the default browser,
+    // Everything in this window is ignored by Windows until LinkPilot is the default browser,
     // and that has to be set by hand in Settings. Without saying so, the whole thing just looks
     // broken: you set up categories, click a link somewhere, and it opens in the old browser.
     public bool IsDefaultBrowser
@@ -170,7 +224,7 @@ partial class SwitchForm : Form
         get
         {
             // Windows 11 24H2 and later record the choice in UserChoiceLatest and leave the older
-            // UserChoice as it was - on this PC it still said Firefox after Browser Switch had been
+            // UserChoice as it was - on this PC it still said Firefox after LinkPilot had been
             // chosen in Settings. So the newer record wins whenever it exists.
             const string https = @"SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\https\";
             try
@@ -219,7 +273,7 @@ partial class SwitchForm : Form
         return null;
     }
 
-    // Whether Browser Switch is the default browser can change while the window is open - in
+    // Whether LinkPilot is the default browser can change while the window is open - in
     // Settings, or by another browser asking to be the default. Checked whenever the window comes
     // to the front: the yellow strip and the top line follow.
     void CheckDefault()
@@ -236,11 +290,7 @@ partial class SwitchForm : Form
         var say = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         say.Controls.Add(new Label { AutoSize = true, ForeColor = Color.FromArgb(90, 60, 0), Font = new Font(Font, FontStyle.Bold),
                                      Margin = new Padding(3, 6, 0, 0),
-                                     Text = "⚠  Not switched on yet - links do not pass through Browser Switch" });
-        say.Controls.Add(new HelpMark(
-            "Windows sends every link to your default browser, and only you can change that - no program is " +
-            "allowed to. Until Browser Switch is the default for HTTP and HTTPS, nothing in this window has any " +
-            "effect.\nThe button opens the right page in Settings.") { Margin = new Padding(6, 7, 0, 0) });
+                                     Text = "⚠  Not switched on yet - links do not pass through LinkPilot" });
         var open = new Button { Dock = DockStyle.Right, Width = 170, Text = "Set it up", AutoSize = false };
         open.Click += delegate { ShowSetup(); };
         strip.Controls.Add(say);
@@ -262,22 +312,59 @@ partial class SwitchForm : Form
             if (p.Text.StartsWith(name, StringComparison.OrdinalIgnoreCase)) { tabs.SelectedTab = p; ShowTab(); return; }
     }
 
-    // A tab's contents are built fresh each time it is opened, so they always show the categories as
-    // they are now - one added a moment ago on the Categories tab included.
+    // Each tab's contents are built once and kept - building them (110 tracking parts, 176 apps, the
+    // log) is what took a moment and flickered. A tab is built again only when config.txt has changed
+    // since, somewhere else than on that tab - a category added on Categories, rules switched off from
+    // the dock - so it always shows things as they are now. The tabs not opened yet are built quietly,
+    // one at a time, just after the window appears, so opening one is instant.
+    readonly Dictionary<TabPage, string> builtFor = new Dictionary<TabPage, string>();   // config.txt as it was then
+
     void ShowTab()
     {
         PauseKeys(tabs.SelectedTab == shortcutsPage);
-        if (tabs.SelectedTab == rulesPage) Fill(rulesPage, new RulesPage(() => { Save(); Reload(); }));
-        else if (tabs.SelectedTab == shortcutsPage) Fill(shortcutsPage, new ShortcutsPage(ShortcutFree, () => { Save(); Reload(); }));
-        else if (tabs.SelectedTab == cleaningPage) Fill(cleaningPage, new CleaningPage(Save));
-        else if (tabs.SelectedTab == logPage) Fill(logPage, new LogPage(Save));
-        else if (tabs.SelectedTab == aboutPage) Fill(aboutPage, new AboutPage(Save, ShowSetup));
+        Build(tabs.SelectedTab);
     }
 
-    static void Fill(TabPage page, Control content)
+    void Build(TabPage page)
     {
+        string was;
+        if (page == categoriesPage || (builtFor.TryGetValue(page, out was) && was == Config.LastText)) return;
+        Control content = page == rulesPage ? new RulesPage(() => { Save(); Reload(); })
+                        : page == shortcutsPage ? new ShortcutsPage(ShortcutFree, () => { Save(); Reload(); })
+                        : page == cleaningPage ? new CleaningPage(Save)
+                        : page == logPage ? new LogPage(Save)
+                        : (Control)new AboutPage(Save, ShowSetup);
+        page.SuspendLayout();
         foreach (var old in page.Controls.Cast<Control>().ToList()) old.Dispose();
         page.Controls.Add(content);
+        page.ResumeLayout();
+        Ui.HandCursors(content);
+        builtFor[page] = Config.LastText;
+    }
+
+    // Once the window is up (or prepared unseen): the other tabs, one every 150 ms, so the window
+    // never waits for them.
+    void BuildTheRestQuietly()
+    {
+        if (quietStarted) return;
+        quietStarted = true;
+        var clock = new Timer { Interval = 150 };
+        clock.Tick += delegate
+        {
+            var next = tabs.TabPages.Cast<TabPage>().FirstOrDefault(p => p != categoriesPage && p != tabs.SelectedTab && !builtFor.ContainsKey(p));
+            if (next == null || IsDisposed) { clock.Stop(); clock.Dispose(); return; }
+            Build(next);
+            MakeReal(next);
+        };
+        clock.Start();
+    }
+
+    // Windows makes a control's own window only when it is first shown - for the long lists that is
+    // most of the wait. Asking for each one's handle makes them now, while nobody is looking.
+    static void MakeReal(Control c)
+    {
+        var handle = c.Handle;
+        foreach (Control child in c.Controls) MakeReal(child);
     }
 
     // While the Shortcuts tab is open the dock lets go of its keys, so pressing one records it here
@@ -378,10 +465,6 @@ partial class SwitchForm : Form
         foreach (var old in switchRow.Controls.Cast<Control>().ToList()) old.Dispose();
         if (Config.Categories.Count > 0)
         {
-            // the "?" in front, so the label stays next to the buttons it names
-            switchRow.Controls.Add(new HelpMark("Click a category to make it live: from then on links open in its browser. " +
-                "While rules are on, a link that matches a rule still goes where the rule says.")
-                { Margin = new Padding(3, 10, 6, 0) });
             switchRow.Controls.Add(new Label { Text = "Switch to:", AutoSize = true, Margin = new Padding(0, 9, 8, 0) });
         }
         foreach (var c in Config.Categories)
@@ -411,9 +494,9 @@ partial class SwitchForm : Form
         bool rulesInUse = Config.RulesOn && ticked > 0;
         if (!IsDefaultBrowser)
         {
-            // Windows sends links straight to the default browser - Browser Switch never sees them
+            // Windows sends links straight to the default browser - LinkPilot never sees them
             string[] other = CurrentDefault();
-            caption.Text = "Browser Switch is not your default browser - links go straight to:";
+            caption.Text = "LinkPilot is not your default browser - links go straight to:";
             header.Text = other != null ? other[0] : "your default browser";
             var old = headerIcon.Image;
             headerIcon.Image = null;
@@ -519,7 +602,13 @@ partial class SwitchForm : Form
 
     // ---- actions ---------------------------------------------------------------------------------
 
-    void Save() { Config.Save(); if (Saved != null) Saved(); }
+    // A tab that saves shows its own change already, so it is not built again for it.
+    void Save()
+    {
+        Config.Save();
+        if (tabs != null && tabs.SelectedTab != null && builtFor.ContainsKey(tabs.SelectedTab)) builtFor[tabs.SelectedTab] = Config.LastText;
+        if (Saved != null) Saved();
+    }
 
 
     void SetInDock(bool on)
@@ -590,7 +679,7 @@ partial class SwitchForm : Form
     void DeleteCategory()
     {
         var c = Selected(); if (c == null) return;
-        if (MessageBox.Show(this, "Delete the category “" + c.Name + "”?", "Browser Switch",
+        if (MessageBox.Show(this, "Delete the category “" + c.Name + "”?", "LinkPilot",
                             MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         Config.Categories.Remove(c);
         if (string.Equals(Config.Active, c.Name, StringComparison.OrdinalIgnoreCase))
@@ -627,7 +716,7 @@ partial class SwitchForm : Form
     // would be silly.
     string Ask(string question, string preset)
     {
-        using (var dlg = new Form { Text = "Browser Switch", Size = new Size(380, 165), FormBorderStyle = FormBorderStyle.FixedDialog,
+        using (var dlg = new Form { Text = "LinkPilot", Size = new Size(380, 165), FormBorderStyle = FormBorderStyle.FixedDialog,
                                     StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false, Font = Font })
         {
             var label = new Label { Text = question, Left = 14, Top = 16, Width = 340, AutoSize = false, Height = 20 };

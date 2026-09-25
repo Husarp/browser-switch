@@ -1,13 +1,13 @@
 // The icon .htm and .html files show in File Explorer and on the desktop.
 //
-// Windows takes it from Browser Switch's own registration (HKCU\Software\Classes\BrowserSwitchURL\
-// DefaultIcon), so by default every web page file wore the Browser Switch arrows. Instead it follows
+// Windows takes it from LinkPilot's own registration (HKCU\Software\Classes\BrowserSwitchURL\
+// DefaultIcon), so by default every web page file wore the LinkPilot arrows. Instead it follows
 // the browser such a file would open in - a matching rule's, or the live category's - after every
 // switch. Three looks, chosen in the dock's right-click menu:
 //
 //   page     a white page with that browser's icon on its corner (the default)
 //   browser  that browser's icon, exactly as the dock shows it
-//   own      Browser Switch's own icon, as before
+//   own      LinkPilot's own icon, as before
 //
 // Windows only takes icons from files, so the icon is drawn once into file-icons\ next to the exe,
 // under a name that changes whenever the picture does - Windows keeps icons it has seen by file
@@ -38,11 +38,11 @@ static class FileIcon
 
     public static string Describe(string style)
     {
-        return style == "browser" ? "The browser's icon" : style == "own" ? "Browser Switch's own icon" : "A web page with the browser's icon";
+        return style == "browser" ? "The browser's icon" : style == "own" ? "LinkPilot's own icon" : "A web page with the browser's icon";
     }
 
     // Brings the file icon up to date. Called by the dock after every change, and by --switch and
-    // --reset. Does nothing until Browser Switch is installed (no registration to change).
+    // --reset. Does nothing until LinkPilot is installed (no registration to change).
     public static void Update()
     {
         try

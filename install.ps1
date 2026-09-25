@@ -1,6 +1,6 @@
-﻿# Makes "Browser Switch" appear in Windows Settings as a browser you can choose.
+﻿# Makes "LinkPilot" appear in Windows Settings as a browser you can choose.
 #
-# This does NOT change your default browser. It only adds Browser Switch to the list, the same way
+# This does NOT change your default browser. It only adds LinkPilot to the list, the same way
 # installing a browser does. Nothing about your browsing changes until you pick it yourself in
 # Settings - Windows requires that click and will not accept it from a script.
 #
@@ -16,15 +16,18 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe  = Join-Path $here 'BrowserSwitch.exe'
 if (-not (Test-Path $exe)) { throw "BrowserSwitch.exe is missing - run build.cmd first." }
 
-# Where Browser Switch was installed before this, if anywhere - read now, before this run records its
+# Where LinkPilot was installed before this, if anywhere - read now, before this run records its
 # own place. Installed again or moved, it takes over the original browser remembered there (step 5).
 $previousHome = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BrowserSwitch' -ErrorAction SilentlyContinue).InstallLocation
 
 $progId = 'BrowserSwitchURL'
 $app    = 'BrowserSwitch'     # the client key name AND the name in RegisteredApplications - Firefox
                               # and Brave use the same token for both, so this does too
-$name   = 'Browser Switch'    # what a person sees
+$name   = 'LinkPilot'    # what a person sees
+$aumid  = 'com.husarp.linkpilot'   # the app's identity to Windows (AppUserModelID), the same as the Android app's ID
 $about  = 'Sends each link to the browser and profile you chose'
+# The names above without "LinkPilot" in them (BrowserSwitchURL, BrowserSwitch) are from before it was
+# renamed, and are kept: they are what Windows remembers as your default browser.
 
 function Set-Key($path, $value, $propertyName = '(default)') {
   if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
@@ -38,12 +41,12 @@ Set-Key "HKCU:\Software\Classes\$progId\DefaultIcon" "$exe,0"
 Set-Key "HKCU:\Software\Classes\$progId\shell\open\command" "`"$exe`" `"%1`""
 
 # ...and WHO that handler is. Without this, Windows' own list of apps for http links did include
-# Browser Switch - first, marked "recommended" - but under the name "BrowserSwitch.exe", with no
+# LinkPilot - first, marked "recommended" - but under the name "BrowserSwitch.exe", with no
 # icon, no publisher and no app identity. Brave's handler carries exactly these values, and Brave
 # is registered per-user the same way we are. AppUserModelId matches the Start menu shortcut and
 # the client key, so Windows can tell all three are the same program.
-Set-Key "HKCU:\Software\Classes\$progId" $app 'AppUserModelId'
-Set-Key "HKCU:\Software\Classes\$progId\Application" $app 'AppUserModelId'
+Set-Key "HKCU:\Software\Classes\$progId" $aumid 'AppUserModelId'
+Set-Key "HKCU:\Software\Classes\$progId\Application" $aumid 'AppUserModelId'
 Set-Key "HKCU:\Software\Classes\$progId\Application" $name 'ApplicationName'
 Set-Key "HKCU:\Software\Classes\$progId\Application" "$exe,0" 'ApplicationIcon'
 Set-Key "HKCU:\Software\Classes\$progId\Application" $about 'ApplicationDescription'
@@ -66,13 +69,13 @@ Set-Key "$client\Capabilities\StartMenu" $app 'StartMenuInternet'
 
 # 3. tell Windows this registration exists. The value name matches the client key name, the way
 #    browser installers do it.
-Remove-ItemProperty 'HKCU:\Software\RegisteredApplications' -Name $name -ErrorAction SilentlyContinue
+Remove-ItemProperty 'HKCU:\Software\RegisteredApplications' -Name 'Browser Switch' -ErrorAction SilentlyContinue   # the value name used before 2.1.0
 Set-Key 'HKCU:\Software\RegisteredApplications' "Software\Clients\StartMenuInternet\$app\Capabilities" $app
 
 # 4. two shortcuts that open the window: one in the Start menu, as every installed browser has, and
 #    one on the Desktop.
 $wsh = New-Object -ComObject WScript.Shell
-$startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Browser Switch.lnk'
+$startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\LinkPilot.lnk'
 $desktop   = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Switch browser.lnk'
 foreach ($shortcut in @($startMenu, $desktop)) {
   $lnk = $wsh.CreateShortcut($shortcut)
@@ -88,13 +91,13 @@ foreach ($shortcut in @($startMenu, $desktop)) {
 
 # 4a. Start with Windows - in the dock (notification area) only, no window: --tray. Deleting this
 #     shortcut from the Startup folder stops that; nothing else depends on it.
-$startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'Browser Switch.lnk'
+$startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'LinkPilot.lnk'
 $lnk = $wsh.CreateShortcut($startup)
 $lnk.TargetPath = $exe
 $lnk.Arguments = '--tray'
 $lnk.WorkingDirectory = $here
 $lnk.IconLocation = "$exe,0"
-$lnk.Description = 'Browser Switch in the notification area'
+$lnk.Description = 'LinkPilot in the notification area'
 $lnk.Save()
 
 # 4b. Give the Start menu shortcut an "AppUserModelID" - the short identity string Windows uses to
@@ -163,7 +166,13 @@ public static class BsShortcutIdentity
 }
 '@
 }
-[BsShortcutIdentity]::Set($startMenu, $app)
+[BsShortcutIdentity]::Set($startMenu, $aumid)
+
+# 4d. Before it was called LinkPilot its shortcuts were called "Browser Switch" - those go.
+foreach ($old in (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Browser Switch.lnk'),
+                 (Join-Path ([Environment]::GetFolderPath('Startup')) 'Browser Switch.lnk')) {
+  Remove-Item $old -Force -ErrorAction SilentlyContinue
+}
 
 # 4c. Register as an installed program - the record that lists it in Settings > Apps > Installed
 #     apps, so it can be removed from there like any other program. Per user, like the rest, so no
@@ -206,16 +215,16 @@ if (-not (Test-Path $config)) {
     if (-not $cmd) { $cmd = (Get-ItemProperty "HKLM:\SOFTWARE\Classes\$progId\shell\open\command" -ErrorAction SilentlyContinue).'(default)' }
     if ($cmd -match '"([^"]+\.exe)"') { $fallback = $Matches[1] }
   }
-  # Browser Switch itself is the default already - installed again, or moved: the browser used
+  # LinkPilot itself is the default already - installed again, or moved: the browser used
   # before it is the one the earlier copy remembered
   if (-not $fallback -and $progId -like 'BrowserSwitch*' -and $previousHome -and ($previousHome.TrimEnd('\') -ne $here.TrimEnd('\'))) {
     $line = Get-Content (Join-Path $previousHome 'config.txt') -ErrorAction SilentlyContinue | Where-Object { $_ -like 'fallback=*' } | Select-Object -First 1
     if ($line -and (Test-Path $line.Substring(9).Trim())) {
       $fallback = $line.Substring(9).Trim()
-      Write-Host "Browser Switch is already the default - the original browser is taken over from $previousHome"
+      Write-Host "LinkPilot is already the default - the original browser is taken over from $previousHome"
     }
   }
-  $lines = @('# Browser Switch. Edit by hand if you like - the window writes the same thing.',
+  $lines = @('# LinkPilot. Edit by hand if you like - the window writes the same thing.',
              '# category=<name>|<browser exe>|<profile arguments>|<what to show>', '', 'active=')
   if ($fallback) { $lines += "fallback=$fallback"; Write-Host "Current default browser remembered as the fallback: $fallback" }
   $lines -join "`r`n" | Set-Content $config -Encoding UTF8
@@ -223,9 +232,9 @@ if (-not (Test-Path $config)) {
 
 if ($Quiet) { return }
 Write-Host ''
-Write-Host 'Browser Switch is registered.' -ForegroundColor Green
+Write-Host 'LinkPilot is registered.' -ForegroundColor Green
 Write-Host ''
 Write-Host 'It opens now and walks you through the one step left - choosing it as your default browser,'
 Write-Host 'which Windows lets only you do. Until then, links keep going where they go today.'
-Write-Host 'To remove it: Settings > Apps > Installed apps > Browser Switch.'
+Write-Host 'To remove it: Settings > Apps > Installed apps > LinkPilot.'
 Start-Process $exe
