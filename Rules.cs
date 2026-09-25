@@ -216,16 +216,15 @@ static class AppCatalog
 }
 
 // The Rules tab of the main window: tick a rule on or off, move it up or down (the first match
-// decides), change where it sends links, add apps or addresses. Every change is saved at once.
+// decides), edit where it sends links, add apps or addresses. Every change is saved at once.
 class RulesPage : UserControl
 {
     readonly Action save;
     readonly ListView list = new ListView { View = View.Details, CheckBoxes = true, FullRowSelect = true, HideSelection = false,
                                             Dock = DockStyle.Fill, HeaderStyle = ColumnHeaderStyle.Nonclickable, MultiSelect = false };
-    readonly ComboBox goesTo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     readonly Label empty = new Label { Text = "No rules yet.\nAdd apps or addresses with the buttons on the right.",
                                        TextAlign = ContentAlignment.MiddleCenter, ForeColor = SystemColors.GrayText, BackColor = SystemColors.Window };
-    bool filling;
+    bool filling, doubleClick;
 
     static bool Same(string a, string b) { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
 
@@ -245,42 +244,38 @@ class RulesPage : UserControl
             "Which wins: a matching rule beats the live category; the first match decides (Move up / down).",
             "No match: the link goes to the live category.",
             "Off: untick one rule, or Use rules for all - also in the dock menu and on a shortcut.",
+            "Edit: where a rule sends links, or its address - or double-click the rule.",
+            "Same app or address twice: you choose - replace the older rule, or keep it.",
             "# App rules",
             "Known by: the program file. Store apps may hide behind Windows - use an address rule for those.",
             "Opened links lately: in Add apps…, what really opened your links.",
             "# Address rules",
             "github.com: also covers gist.github.com. With a / it is looked for anywhere in the link.") { Margin = new Padding(6, 1, 0, 0) });
 
-        list.Columns.Add("When a link…", 270);
-        list.Columns.Add("goes to", -2);                   // -2: fills the rest of the width
+        // an app rule fills the first column, an address rule the second - one list, so the order
+        // (the first match decides) stays across both kinds
+        list.Columns.Add("When a link comes from", 190);
+        list.Columns.Add("or its address has", 170);
+        list.Columns.Add("Goes to profile", -2);           // -2: fills the rest of the width
         list.ItemChecked += (s, e) => { if (filling) return; ((Rule)e.Item.Tag).On = e.Item.Checked; save(); };
-        list.SelectedIndexChanged += delegate { ShowSelected(); };
+        list.ItemActivate += delegate { Edit(); };         // double-click a rule to edit it
+        // ...without the double-click also ticking or unticking it, as Windows would
+        list.MouseDown += (s, e) => doubleClick = e.Clicks > 1;
+        list.MouseUp += delegate { doubleClick = false; };
+        list.ItemCheck += (s, e) => { if (doubleClick) e.NewValue = e.CurrentValue; };
         list.Controls.Add(empty);
-        list.Resize += delegate { empty.SetBounds(0, 40, list.ClientSize.Width, 60); list.Columns[1].Width = -2; };
+        list.Resize += delegate { empty.SetBounds(0, 40, list.ClientSize.Width, 60); list.Columns[2].Width = -2; };
 
         var side = new FlowLayoutPanel { Dock = DockStyle.Right, Width = 150, FlowDirection = FlowDirection.TopDown, Padding = new Padding(8, 4, 4, 4) };
         side.Controls.Add(SideButton("Add apps…", delegate { AddApps(); }));
         side.Controls.Add(SideButton("Add address…", delegate { AddAddress(); }));
+        side.Controls.Add(SideButton("Edit…", delegate { Edit(); }));
         side.Controls.Add(SideButton("Remove", delegate { Remove(); }));
         side.Controls.Add(SideButton("Move up", delegate { MoveRule(-1); }));
         side.Controls.Add(SideButton("Move down", delegate { MoveRule(1); }));
 
-        var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42, Padding = new Padding(8, 6, 8, 4) };
-        bottom.Controls.Add(new Label { Text = "Selected rule sends links to:", AutoSize = true, Margin = new Padding(3, 7, 3, 3) });
-        goesTo.Items.AddRange(Config.Categories.Select(c => (object)c.Name).ToArray());
-        goesTo.SelectedIndexChanged += delegate
-        {
-            var r = Selected();
-            if (filling || r == null || goesTo.SelectedItem == null) return;
-            r.Category = (string)goesTo.SelectedItem;
-            save();
-            Fill();
-        };
-        bottom.Controls.Add(goesTo);
-
         Controls.Add(list);
         Controls.Add(side);
-        Controls.Add(bottom);
         Controls.Add(top);
         Fill();
     }
@@ -302,7 +297,8 @@ class RulesPage : UserControl
         list.Items.Clear();
         foreach (var r in Config.Rules)
         {
-            var item = new ListViewItem(r.Describe()) { Checked = r.On, Tag = r };
+            var item = new ListViewItem(r.ByApp ? r.Label : "") { Checked = r.On, Tag = r };
+            item.SubItems.Add(r.ByApp ? "" : r.Label);
             bool known = Config.Categories.Any(c => Same(c.Name, r.Category));
             item.SubItems.Add(known ? r.Category : r.Category + "  (no such category - skipped)");
             list.Items.Add(item);
@@ -310,18 +306,6 @@ class RulesPage : UserControl
         list.EndUpdate();
         empty.Visible = Config.Rules.Count == 0;
         if (select >= 0 && select < list.Items.Count) { list.Items[select].Selected = true; list.Items[select].EnsureVisible(); }
-        filling = false;
-        ShowSelected();
-    }
-
-    void ShowSelected()
-    {
-        filling = true;
-        var r = Selected();
-        goesTo.Enabled = r != null;
-        goesTo.SelectedItem = null;
-        if (r != null)
-            foreach (object o in goesTo.Items) if (Same((string)o, r.Category)) goesTo.SelectedItem = o;
         filling = false;
     }
 
@@ -350,40 +334,105 @@ class RulesPage : UserControl
         using (var picker = new AppPicker())
         {
             if (picker.ShowDialog(FindForm()) != DialogResult.OK) return;
+            int last = -1;
             foreach (var a in picker.Chosen)
-                if (!Config.Rules.Any(r => r.ByApp && Same(r.Match, a.Exes)))
-                    Config.Rules.Add(new Rule { ByApp = true, Label = a.Name, Match = a.Exes, Category = picker.Target });
+            {
+                var r = new Rule { ByApp = true, Label = a.Name, Match = a.Exes, Category = picker.Target };
+                if (Place(r, null)) last = Config.Rules.IndexOf(r);
+            }
             save();
-            Fill(Config.Rules.Count - 1);
+            Fill(last);
         }
     }
 
     void AddAddress()
     {
-        using (var d = new Form { Text = "Add an address", Size = new Size(430, 210), FormBorderStyle = FormBorderStyle.FixedDialog,
+        var r = new Rule { ByApp = false };
+        if (!RuleDialog(r, "Add an address", "Add") || !Place(r, null)) return;
+        save();
+        Fill(Config.Rules.IndexOf(r));
+    }
+
+    void Edit()
+    {
+        var r = Selected(); if (r == null) return;
+        var changed = new Rule { On = r.On, ByApp = r.ByApp, Label = r.Label, Match = r.Match, Category = r.Category };
+        if (!RuleDialog(changed, "Edit rule", "Save") || !Place(changed, r)) return;
+        save();
+        Fill(Config.Rules.IndexOf(changed));
+    }
+
+    // Puts a new rule into the list - or an edited one in place of the rule it was (was). If another
+    // rule is already for the same app or address, asks which one stays: the new one then takes the
+    // older one's place in the order. False: the older one stays, and nothing changes.
+    bool Place(Rule r, Rule was)
+    {
+        var older = Config.Rules.FirstOrDefault(x => x != was && x.ByApp == r.ByApp &&
+            (r.ByApp ? x.Match.Split(';').Intersect(r.Match.Split(';'), StringComparer.OrdinalIgnoreCase).Any() : Same(x.Match, r.Match)));
+        if (older != null && !ReplaceOlder(older, r)) return false;
+        int at = was != null ? Config.Rules.IndexOf(was) : older != null ? Config.Rules.IndexOf(older) : Config.Rules.Count;
+        if (was != null) Config.Rules.Remove(was);
+        if (older != null) { if (Config.Rules.IndexOf(older) < at) at--; Config.Rules.Remove(older); }
+        Config.Rules.Insert(Math.Min(at, Config.Rules.Count), r);
+        return true;
+    }
+
+    // "Signal already has a rule" - Replace the older rule, or Keep the older rule (also Esc).
+    bool ReplaceOlder(Rule older, Rule r)
+    {
+        string what = older.ByApp ? older.Label : "The address " + older.Label;
+        using (var d = new Form { Text = "Already has a rule", Size = new Size(470, 180), FormBorderStyle = FormBorderStyle.FixedDialog,
                                   StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false,
                                   ShowInTaskbar = false, Font = Font })
         {
-            var ask = new Label { Text = "Links whose address has:", Left = 14, Top = 16, AutoSize = true };
-            var hint = new TabHelp("Links to an address",
-                "Sites under it: github.com also covers gist.github.com and www.github.com.",
-                "With a /: github.com/my-company is looked for anywhere in the link.") { Left = 164, Top = 14 };
-            var box = new TextBox { Left = 14, Top = 40, Width = 390 };
-            var to = new Label { Text = "go to:", Left = 14, Top = 84, AutoSize = true };
-            var cat = new ComboBox { Left = 60, Top = 80, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
+            var say = new Label { Left = 14, Top = 16, Width = 430, Height = 60,
+                                  Text = what + " already has a rule: its links go to " + older.Category + ".\n" +
+                                         (Same(older.Category, r.Category) ? "The new one sends them there too."
+                                                                           : "The new one would send them to " + r.Category + ".") };
+            var replace = new Button { Text = "Replace the older rule", DialogResult = DialogResult.Yes, Left = 128, Top = 90, Width = 160 };
+            var keep = new Button { Text = "Keep the older rule", DialogResult = DialogResult.No, Left = 296, Top = 90, Width = 150 };
+            d.Controls.AddRange(new Control[] { say, replace, keep });
+            d.AcceptButton = replace; d.CancelButton = keep;
+            Ui.HandCursors(d);
+            return d.ShowDialog(FindForm()) == DialogResult.Yes;
+        }
+    }
+
+    // Asks for a rule's address (address rules) and where its links go, and puts the answers in r.
+    // An app rule shows its app; to have another app, remove the rule and add that app.
+    bool RuleDialog(Rule r, string title, string okText)
+    {
+        using (var d = new Form { Text = title, Size = new Size(430, 210), FormBorderStyle = FormBorderStyle.FixedDialog,
+                                  StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false,
+                                  ShowInTaskbar = false, Font = Font })
+        {
+            var ask = new Label { Text = r.ByApp ? "Links that come from:" : "Links whose address has:", Left = 14, Top = 16, AutoSize = true };
+            var box = new TextBox { Left = 14, Top = 40, Width = 390, Text = r.Match };
+            var app = new Label { Left = 14, Top = 42, AutoSize = true, Font = new Font(Font, FontStyle.Bold),
+                                  Text = r.Label + "   (" + r.Match.Replace(";", ", ") + ")" };
+            var to = new Label { Text = "go to profile:", Left = 14, Top = 84, AutoSize = true };
+            var cat = new ComboBox { Left = 100, Top = 80, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
             cat.Items.AddRange(Config.Categories.Select(c => (object)c.Name).ToArray());
-            if (cat.Items.Count > 0) cat.SelectedIndex = 0;
-            var ok = new Button { Text = "Add", DialogResult = DialogResult.OK, Left = 238, Top = 130, Width = 80 };
+            cat.SelectedItem = cat.Items.Cast<object>().FirstOrDefault(o => Same((string)o, r.Category));
+            if (cat.SelectedItem == null && cat.Items.Count > 0) cat.SelectedIndex = 0;
+            var ok = new Button { Text = okText, DialogResult = DialogResult.OK, Left = 238, Top = 130, Width = 80 };
             var no = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 324, Top = 130, Width = 80 };
-            d.Controls.AddRange(new Control[] { ask, box, hint, to, cat, ok, no });
+            d.Controls.AddRange(new Control[] { ask, r.ByApp ? (Control)app : box, to, cat, ok, no });
+            if (!r.ByApp)
+                d.Controls.Add(new TabHelp("Links to an address",
+                    "Sites under it: github.com also covers gist.github.com and www.github.com.",
+                    "With a /: github.com/my-company is looked for anywhere in the link.") { Left = 164, Top = 14 });
             d.AcceptButton = ok; d.CancelButton = no;
             Ui.HandCursors(d);
-            if (d.ShowDialog(FindForm()) != DialogResult.OK || cat.SelectedItem == null) return;
-            string address = Router.CleanAddress(box.Text);
-            if (address.Length == 0) return;
-            Config.Rules.Add(new Rule { ByApp = false, Label = address, Match = address, Category = (string)cat.SelectedItem });
-            save();
-            Fill(Config.Rules.Count - 1);
+            if (d.ShowDialog(FindForm()) != DialogResult.OK || cat.SelectedItem == null) return false;
+            if (!r.ByApp)
+            {
+                string address = Router.CleanAddress(box.Text);
+                if (address.Length == 0) return false;
+                r.Label = r.Match = address;
+            }
+            r.Category = (string)cat.SelectedItem;
+            return true;
         }
     }
 }

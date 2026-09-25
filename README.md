@@ -41,7 +41,7 @@ as your default browser. [Read the script first](get.ps1) if you like — it is 
 ### From the files
 
 1. On the [Releases page](https://github.com/Husarp/linkpilot/releases), download
-   **`BrowserSwitch-<version>.zip`** — the ready-made program with everything needed to install and
+   **`LinkPilot-<version>.zip`** — the ready-made program with everything needed to install and
    remove it. (The release also has `BrowserSwitch.exe` on its own, the Android app, and the source code.)
 2. Unzip it into a folder you will keep — Windows runs the program from there.
 3. Double-click **`Install.cmd`**. LinkPilot opens and walks you through the rest.
@@ -236,6 +236,13 @@ links to Home. In the window, the **Rules** tab.
   decides — **Move up / Move down** set the order. A link no rule matches goes to the live category
   as always. A link sent by a rule shows no note.
 - **A tick per rule** keeps it but stops it. A rule whose category has been deleted is skipped.
+- **Edit…** (or double-click a rule) changes the profile its links go to — and, for an address
+  rule, the address.
+- **One rule per app or address.** Adding (or editing into) one that already has a rule asks which
+  stays: *Replace the older rule* — the new one takes its place in the order — or *Keep the older
+  rule*.
+- **The list** shows an app rule under *When a link comes from* and an address rule under *or its
+  address has* — one list, so the order counts across both.
 - **Rules on / off — one switch for all of them**, reachable three ways: the **Use rules** tick at the
   top of the window, *Use rules* in the dock's right-click menu, and its own **keyboard shortcut**
   (on the *Shortcuts* tab, suggested Ctrl+Alt+R, or the nearest free one). Off, every link simply opens in
@@ -352,7 +359,7 @@ The one command under [Install](#install) does all of this by itself. By hand:
 
 1. **Get the program**, either way:
    - **Download** from the [Releases page](https://github.com/Husarp/linkpilot/releases) —
-     `BrowserSwitch-<version>.zip` — and unzip it
+     `LinkPilot-<version>.zip` — and unzip it
      into a folder you will keep. The program is not signed, so Windows may say *"Windows protected your PC"* the
      first time — *More info → Run anyway*.
    - or **build it**: double-click `build.cmd`. It makes `BrowserSwitch.exe` with the C# compiler
@@ -401,8 +408,8 @@ What `install.ps1` sets up, and why:
   saying it handles http, https, .htm and .html. This is what puts it in Windows' list of apps for
   links;
 - **an identity** — a name, an icon and a publisher, both inside the exe and on the link handler, and
-  one app ID, `BrowserSwitch`, shared by the link handler, the client key and the Start menu
-  shortcut. Before 2.2.0 the exe had no icon and a blank name, so the most Windows could call it was
+  one app ID, `com.husarp.linkpilot` (the same as the Android app's), shared by the link handler and
+  the Start menu shortcut. Before 2.2.0 the exe had no icon and a blank name, so the most Windows could call it was
   "BrowserSwitch.exe";
 - **a Start menu shortcut**, and an entry in Settings → Apps → Installed apps, so it can be found and
   removed like any other program.

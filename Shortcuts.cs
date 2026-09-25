@@ -294,6 +294,17 @@ class ShortcutsPage : UserControl
         UpdateLines();
     }
 
+    // Windows does not tell which program holds a shortcut - so the hover says what usually does.
+    const string TakenHint =
+        "Another program running now has claimed these keys, so they would not reach LinkPilot.\n" +
+        "Windows does not say which program. Often: PowerToys, AutoHotkey, Discord, Steam,\n" +
+        "screenshot tools, or the graphics driver's overlay (NVIDIA, AMD).\n" +
+        "Keyboard and mouse software that only presses the keys for you (Logi Options+) does not claim them.";
+
+    // Checked again each time the tab is opened: it may have been built in the background while the
+    // dock still held its keys - which then looked "taken by another program".
+    public void CheckAgain() { UpdateLines(); }
+
     void UpdateLines()
     {
         // only shortcuts in use can clash with each other
@@ -320,6 +331,7 @@ class ShortcutsPage : UserControl
                 typed != null ? "types " + typed :
                 isFree != null && !isFree(s) ? "taken by another program" : null;
             line.Status.Text = problem != null ? "⚠ " + problem : Config.ShortcutsOn ? "✓ ready" : "ready - tick Turn on";
+            hints.SetToolTip(line.Status, problem == "taken by another program" ? TakenHint : "");
             line.Status.ForeColor = problem != null ? Color.DarkOrange : Config.ShortcutsOn ? Color.SeaGreen : SystemColors.GrayText;
         }
     }

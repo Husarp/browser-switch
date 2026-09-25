@@ -323,6 +323,8 @@ partial class SwitchForm : Form
     {
         PauseKeys(tabs.SelectedTab == shortcutsPage);
         Build(tabs.SelectedTab);
+        if (tabs.SelectedTab == shortcutsPage)   // now that the dock has let go of its keys
+            foreach (var page in shortcutsPage.Controls.OfType<ShortcutsPage>()) page.CheckAgain();
     }
 
     void Build(TabPage page)
