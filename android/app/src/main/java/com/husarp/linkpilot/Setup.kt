@@ -104,6 +104,10 @@ fun SetupScreen(m: Model, makeDefault: () -> Unit, openSettings: () -> Unit, fin
                 Body((if (live != null) "Links now open in ${live.name} (${m.label(live)}).\n" else "") +
                      "Next: add more categories on Home - Work, Home... each with its browser - and the Quick Settings tiles, " +
                      "to switch between them with one tap.")
+                if (Profiles.others(ctx).isNotEmpty())
+                    Body("Browsers in your work profile (Island): LinkPilot has to be installed there too - in Island, " +
+                         "clone it - so it can hand links over. Add a category on Home then lists them, and says if " +
+                         "anything else is still needed.")
                 Nav(back = "←  Back" to { step = 3 }, next = "Finish" to finish)
             }
         }

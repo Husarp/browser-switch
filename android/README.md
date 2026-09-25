@@ -39,8 +39,9 @@ taken out on the way. Switch where links go with one tap on a Quick Settings til
   LinkPilot and pick *Copy clean link*. Only a link on its own is changed; what a password
   manager marks private is left alone.
 - **Browsers in the work profile** (Island, or a work phone's profile) — a category can open its
-  links in a browser over there, badged with the work briefcase. Needs Android 11+, LinkPilot
-  installed in both profiles (Island: clone it), and permission to connect the two copies. Android
+  links in a browser over there, badged with the work briefcase. Needs Android 11+, **LinkPilot
+  installed in both profiles** (Island: clone it - the setup and Home's (i) say so), and permission
+  to connect the two copies. Android
   gives that switch only if the work profile's app lists LinkPilot as a "connected app"; Island
   does not, so it is allowed once from a computer:
   `adb shell appops set com.husarp.linkpilot INTERACT_ACROSS_PROFILES allow`.

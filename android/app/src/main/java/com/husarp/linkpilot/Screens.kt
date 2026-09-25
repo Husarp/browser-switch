@@ -230,7 +230,11 @@ fun HomeTab(m: Model, makeDefault: () -> Unit, openSettings: () -> Unit, showSet
             }
         }
         item {
-            SectionCard("Links open in", "Tap a category to make it live") {
+            SectionCard("Links open in", "Tap a category to make it live", info = listOf(
+                "Category: a name (Work, Home...) and the browser its links open in.",
+                "Live: the category links go to, unless a rule says otherwise.",
+                "Work profile (Island): its browsers can be used too - install LinkPilot there as well (in Island: " +
+                    "clone it). Add a category then lists them, and says if anything else is needed.")) {
                 if (cats.isEmpty()) Text("No categories yet.")
                 cats.forEach { c ->
                     ListItem(
