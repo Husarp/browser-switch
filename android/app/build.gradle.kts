@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,18 +14,33 @@ android {
         applicationId = "com.husarp.linkpilot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.8.0"
+        versionCode = 12
+        versionName = "0.8.1"
+    }
+
+    // The release key lives outside the project (never published): its file and passwords are in
+    // ~/.keystores/linkpilot-signing.properties. Without it - someone else building this - the
+    // release build is signed with that PC's debug key instead.
+    val signing = Properties().apply {
+        val f = File(System.getProperty("user.home"), ".keystores/linkpilot-signing.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (signing.isNotEmpty()) create("release") {
+            storeFile = file(signing.getProperty("storeFile"))
+            storePassword = signing.getProperty("storePassword")
+            keyAlias = signing.getProperty("keyAlias")
+            keyPassword = signing.getProperty("keyPassword")
+        }
     }
 
     buildTypes {
-        // Optimised (R8) - a debug build of Compose scrolls noticeably slower. Signed with this PC's
-        // debug key for now, so it installs over the test builds and keeps their settings.
+        // Optimised (R8) - a debug build of Compose scrolls noticeably slower.
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

@@ -91,8 +91,10 @@ newer than yours.
 
 - Android Studio (its own Java), Android SDK 35.
 - `gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk` — optimised, about
-  1 MB; use this one on a phone (a debug build scrolls noticeably slower). For now it is signed with
-  the building PC's debug key.
+  1 MB; use this one on a phone (a debug build scrolls noticeably slower). It is signed with the
+  release key named in `~/.keystores/linkpilot-signing.properties` (`storeFile`, `storePassword`,
+  `keyAlias`, `keyPassword`) if that file exists - only the author's PC has it - and with your own
+  debug key otherwise. An APK signed with another key cannot be installed over the published one.
 - `gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk` — for testing.
 - `gradlew testDebugUnitTest` — link cleaning checked against the same known answers as the Windows
   app, and address rules.
