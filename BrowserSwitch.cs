@@ -37,8 +37,8 @@ using Microsoft.Win32;
 [assembly: System.Reflection.AssemblyProduct("LinkPilot")]
 [assembly: System.Reflection.AssemblyCompany("LinkPilot")]
 [assembly: System.Reflection.AssemblyDescription("Sends each link to the browser and profile you chose")]
-[assembly: System.Reflection.AssemblyVersion("4.4.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("4.4.1.0")]
+[assembly: System.Reflection.AssemblyVersion("4.4.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("4.4.2.0")]
 
 // ---- what we know about the machine ------------------------------------------------------------
 

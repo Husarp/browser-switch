@@ -413,7 +413,8 @@ class RulesPage : UserControl
             var to = new Label { Text = "go to profile:", Left = 14, Top = 84, AutoSize = true };
             var cat = new ComboBox { Left = 100, Top = 80, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
             cat.Items.AddRange(Config.Categories.Select(c => (object)c.Name).ToArray());
-            cat.SelectedItem = cat.Items.Cast<object>().FirstOrDefault(o => Same((string)o, r.Category));
+            // the rule's own profile - or, for a new rule, the live one
+            cat.SelectedItem = cat.Items.Cast<object>().FirstOrDefault(o => Same((string)o, r.Category.Length > 0 ? r.Category : Config.Active));
             if (cat.SelectedItem == null && cat.Items.Count > 0) cat.SelectedIndex = 0;
             var ok = new Button { Text = okText, DialogResult = DialogResult.OK, Left = 238, Top = 130, Width = 80 };
             var no = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Left = 324, Top = 130, Width = 80 };
@@ -505,7 +506,8 @@ class AppPicker : Form
         bottom.Controls.Add(browse);
         bottom.Controls.Add(new Label { Text = "Send their links to:", AutoSize = true, Margin = new Padding(24, 7, 3, 3) });
         target.Items.AddRange(Config.Categories.Select(c => (object)c.Name).ToArray());
-        if (target.Items.Count > 0) target.SelectedIndex = 0;
+        target.SelectedItem = target.Items.Cast<object>().FirstOrDefault(o => string.Equals((string)o, Config.Active, StringComparison.OrdinalIgnoreCase));
+        if (target.SelectedItem == null && target.Items.Count > 0) target.SelectedIndex = 0;   // the live one, else the first
         bottom.Controls.Add(target);
         var add = new Button { Text = "Add", AutoSize = true, Margin = new Padding(16, 3, 3, 3) };
         add.Click += delegate

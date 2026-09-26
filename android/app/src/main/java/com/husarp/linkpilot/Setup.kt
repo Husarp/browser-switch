@@ -104,10 +104,14 @@ fun SetupScreen(m: Model, makeDefault: () -> Unit, openSettings: () -> Unit, fin
                 Body((if (live != null) "Links now open in ${live.name} (${m.label(live)}).\n" else "") +
                      "Next: add more categories on Home - Work, Home... each with its browser - and the Quick Settings tiles, " +
                      "to switch between them with one tap.")
-                if (Profiles.others(ctx).isNotEmpty())
-                    Body("Browsers in your work profile (Island): LinkPilot has to be installed there too - in Island, " +
-                         "clone it - so it can hand links over. Add a category on Home then lists them, and says if " +
+                val work = if (Profiles.isWorkCopy(ctx)) null else Profiles.others(ctx).firstOrNull()
+                if (work != null) {
+                    Body("Your work profile (Island): install LinkPilot there too - in Island, clone it - and make it that " +
+                         "profile's default browser as well. Then its browsers can be categories here, and links tapped " +
+                         "in work apps come here too, so these rules can name work apps. Add a category on Home says if " +
                          "anything else is still needed.")
+                    if (Profiles.state(ctx, work) == Profiles.State.NotInstalled) IslandButton()
+                }
                 Nav(back = "←  Back" to { step = 3 }, next = "Finish" to finish)
             }
         }

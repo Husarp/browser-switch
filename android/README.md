@@ -46,7 +46,14 @@ taken out on the way. Switch where links go with one tap on a Quick Settings til
   does not, so it is allowed once from a computer:
   `adb shell appops set com.husarp.linkpilot INTERACT_ACROSS_PROFILES allow`.
   *Add a category* then lists the work profile's browsers (by name - Android does not tell one
-  profile what the other's apps open; *Show all its apps* shows the rest).
+  profile what the other's apps open; *Show all its apps* shows the rest). Where LinkPilot is still
+  missing there, **Open Island** opens Island to clone it (Island lets no other app do the cloning).
+- **One LinkPilot decides for both profiles** — make LinkPilot the work profile's default browser too,
+  and the copy there only passes each link tapped in a work app - with the app it came from - to
+  LinkPilot here, whose categories, rules and log cover it. So everything is set up in one place, and
+  app rules can name work apps (marked *(work)*; Signal there and Signal here are different apps to a
+  rule). If it cannot reach this copy, it decides by itself with its own settings - its Home says which.
+  It cannot work without the copy there: Android lets an app start only itself in the other profile.
 - **Link log** — every link, grouped by day: the app it came from (its icon), the site, the time,
   where it went and whether it was cleaned. Tap one for the whole link, what it came as, what was
   taken out and why it went there, with **Copy link** and **Open again**. The newest 300, on the

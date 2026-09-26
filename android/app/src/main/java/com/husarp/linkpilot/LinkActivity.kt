@@ -10,6 +10,7 @@ import android.widget.Toast
 // Every link, while LinkPilot is the default browser: cleaned, sent by the rules or to the live
 // category's browser, written in the link log - and nothing shows. Only if there is no browser to
 // send it to (no category yet, or its browser was uninstalled) is a list of browsers shown.
+// In the work profile it only passes the link on, to the copy in the personal profile (Profiles.kt).
 class LinkActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -18,19 +19,27 @@ class LinkActivity : Activity() {
 
         val store = Store(this)
         // Android says which app sent the link: android-app://org.thoughtcrime.securesms
-        val from = referrer?.takeIf { it.scheme == "android-app" }?.host?.takeIf { it != packageName }
-        if (from != null) store.rememberApp(from)
+        val referred = referrer?.takeIf { it.scheme == "android-app" }?.host?.takeIf { it != packageName }
+        // A link tapped in a work app, passed here by LinkPilot in the work profile: its serial number
+        val workProfile = intent.getLongExtra(Profiles.FROM_PROFILE, -1).takeIf { it >= 0 && !Profiles.isWorkCopy(this) }
+        // In the work profile: the copy in the personal profile decides, if it can be reached
+        if (workProfile == null) Profiles.relayTarget(this)?.let { personal ->
+            if (Profiles.relay(this, personal, asked, referred)) { finish(); return }
+        }
+        val from = if (workProfile != null) intent.getStringExtra(Profiles.FROM_APP) else referred
+        val fromKey = from?.let { Profiles.appKey(it, workProfile) } ?: ""
+        if (fromKey.isNotEmpty()) store.rememberApp(fromKey)
 
         val cleaned = Cleaner.apply(asked, store.cleanOptions())
-        val choice = Router.decide(this, store, cleaned.url, from)
+        val choice = Router.decide(this, store, cleaned.url, from, workProfile)
         val target = choice.category
         if (target != null && Browsers.installed(this, target) && open(target, cleaned.url)) {
-            store.addLog(from ?: "", target.name, choice.why, asked, cleaned.url, cleaned.changes)
+            store.addLog(fromKey, target.name, choice.why, asked, cleaned.url, cleaned.changes)
             sayCleaned(cleaned)
             finish()
             return
         }
-        ask(store, from ?: "", asked, cleaned)
+        ask(store, fromKey, asked, cleaned)
     }
 
     // A browser in the work profile gets the link through LinkPilot over there (Profiles.kt).

@@ -11,7 +11,7 @@ import android.os.Build
 
 // The browsers on this phone, and the apps (for app rules) - by package name, "org.mozilla.firefox".
 object Browsers {
-    class App(val pkg: String, val label: String)
+    class App(val pkg: String, val label: String, val profile: Long? = null)   // profile: an app in the work profile
 
     private fun webIntent() = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE)
 

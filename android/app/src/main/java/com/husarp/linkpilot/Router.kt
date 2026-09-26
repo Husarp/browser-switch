@@ -8,13 +8,17 @@ import android.content.Context
 object Router {
     class Choice(val category: Category?, val why: String)
 
-    fun decide(ctx: Context, store: Store, url: String, fromApp: String?): Choice {
+    // fromProfile: the work profile's serial number when the link was tapped in an app there (and
+    // passed here by LinkPilot over there); null for an app in this profile. Signal here and Signal
+    // in the work profile are two different apps to a rule.
+    fun decide(ctx: Context, store: Store, url: String, fromApp: String?, fromProfile: Long? = null): Choice {
         val cats = store.categories
         if (store.rulesOn) for (r in store.rules) {
             if (!r.on) continue
             val c = cats.firstOrNull { it.name.equals(r.category, ignoreCase = true) } ?: continue
             if (!Browsers.installed(ctx, c)) continue
-            val hit = if (r.byApp) fromApp != null && r.match.split(';').any { it.trim().equals(fromApp, ignoreCase = true) }
+            val hit = if (r.byApp) fromApp != null && r.profile == fromProfile &&
+                                   r.match.split(';').any { it.trim().equals(fromApp, ignoreCase = true) }
                       else hasAddress(r.match, url)
             if (hit) return Choice(c, "${c.name} (rule: ${r.describe()})")
         }

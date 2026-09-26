@@ -22,6 +22,11 @@ import android.os.UserManager
 // connect; then this copy hands the link to the copy over there (ProfileOpenActivity), which opens it
 // in the chosen browser, inside that profile.
 //
+// The other way round, the copy in the work profile decides nothing itself: every link tapped in a work
+// app reaches it (it is the work profile's default browser) and it passes the link - with the app it
+// came from - to the copy in the personal profile (relay), whose categories and rules then decide. So
+// everything is set up in one place, and rules can name apps of either profile.
+//
 // A category keeps the profile by its serial number, which stays the same across restarts.
 object Profiles {
     enum class State {
@@ -55,10 +60,51 @@ object Profiles {
         if (Build.VERSION.SDK_INT >= 30) try { ctx.getSystemService(CrossProfileApps::class.java).createRequestInteractAcrossProfilesIntent() } catch (_: Exception) { null }
         else null
 
+    // This copy is the one in the work profile.
+    fun isWorkCopy(ctx: Context): Boolean = Build.VERSION.SDK_INT >= 30 && users(ctx).isManagedProfile
+
+    // In the work profile: the personal profile, if the copy there can be reached - else null, and
+    // this copy decides by itself, with its own settings.
+    fun relayTarget(ctx: Context): UserHandle? {
+        if (Build.VERSION.SDK_INT < 30 || !isWorkCopy(ctx)) return null
+        val cross = ctx.getSystemService(CrossProfileApps::class.java)
+        return if (cross.canInteractAcrossProfiles()) cross.targetUserProfiles.firstOrNull() else null
+    }
+
+    // Hands a link tapped in a work app to LinkPilot in the personal profile, saying which app.
+    fun relay(activity: Activity, user: UserHandle, url: String, from: String?): Boolean {
+        if (Build.VERSION.SDK_INT < 30) return false
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                .setComponent(ComponentName(activity, LinkActivity::class.java))
+                .putExtra(FROM_PROFILE, serial(activity, Process.myUserHandle()))
+            if (from != null) intent.putExtra(FROM_APP, from)
+            activity.getSystemService(CrossProfileApps::class.java).startActivity(intent, user, activity)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+    const val FROM_APP = "com.husarp.linkpilot.FROM_APP"
+    const val FROM_PROFILE = "com.husarp.linkpilot.FROM_PROFILE"
+
+    // An app of either profile, as the link log and the rules keep it: "org.thoughtcrime.securesms",
+    // or "org.thoughtcrime.securesms@10" for Signal in the work profile (its serial number).
+    fun appKey(pkg: String, profile: Long?) = if (profile == null) pkg else "$pkg@$profile"
+    fun splitKey(key: String): Pair<String, Long?> =
+        key.substringBefore('@') to key.substringAfter('@', "").toLongOrNull()
+
+    // Island's own screen, where LinkPilot is cloned into the work profile (Island lets no other app
+    // do that) - null if Island is not installed.
+    fun islandIntent(ctx: Context): Intent? =
+        listOf("com.oasisfeng.island", "com.oasisfeng.island.fdroid").firstNotNullOfOrNull { ctx.packageManager.getLaunchIntentForPackage(it) }
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
     // The apps on that profile's home screen, as the launcher sees them - with the work badge.
     fun apps(ctx: Context, user: UserHandle): List<Browsers.App> =
         try {
-            launcher(ctx).getActivityList(null, user).map { Browsers.App(it.componentName.packageName, it.label.toString()) }
+            val s = serial(ctx, user)
+            launcher(ctx).getActivityList(null, user).map { Browsers.App(it.componentName.packageName, it.label.toString(), s) }
                 .distinctBy { it.pkg }.filter { it.pkg != ctx.packageName }.sortedBy { it.label.lowercase() }
         } catch (_: Exception) { emptyList() }
 

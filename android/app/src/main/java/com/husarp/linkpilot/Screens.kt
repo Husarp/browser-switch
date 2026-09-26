@@ -205,6 +205,20 @@ fun HomeTab(m: Model, makeDefault: () -> Unit, openSettings: () -> Unit, showSet
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { PageTitle("LinkPilot") }
+        if (Profiles.isWorkCopy(ctx)) item {
+            val passes = Profiles.relayTarget(ctx) != null
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("LinkPilot in your work profile", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(if (passes) "It passes every link from work apps to LinkPilot in your personal profile - its categories " +
+                                     "and rules decide, and can name work apps. Set everything up there; here, only make " +
+                                     "LinkPilot this profile's default browser."
+                         else "It cannot reach LinkPilot in your personal profile (not installed there, or not allowed to " +
+                              "connect), so for now it decides by itself, with the settings here.",
+                         style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
         item {
             if (isDefault) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
@@ -234,7 +248,9 @@ fun HomeTab(m: Model, makeDefault: () -> Unit, openSettings: () -> Unit, showSet
                 "Category: a name (Work, Home...) and the browser its links open in.",
                 "Live: the category links go to, unless a rule says otherwise.",
                 "Work profile (Island): its browsers can be used too - install LinkPilot there as well (in Island: " +
-                    "clone it). Add a category then lists them, and says if anything else is needed.")) {
+                    "clone it). Add a category then lists them, and says if anything else is needed.",
+                "Links tapped in work apps: make LinkPilot the work profile's default browser too - it passes them here, " +
+                    "so these categories and rules decide for them as well.")) {
                 if (cats.isEmpty()) Text("No categories yet.")
                 cats.forEach { c ->
                     ListItem(
@@ -336,8 +352,10 @@ fun WorkProfileBrowsers(m: Model, user: android.os.UserHandle, chosen: Category?
     Text("In the work profile", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
     when (state) {
         Profiles.State.TooOld -> Text("Needs Android 11 or newer.", style = small)
-        Profiles.State.NotInstalled -> Text("Install LinkPilot in the work profile too (in Island: clone it). Then its " +
-            "browsers show here.", style = small)
+        Profiles.State.NotInstalled -> {
+            Text("Install LinkPilot in the work profile too (in Island: clone it). Then its browsers show here.", style = small)
+            IslandButton()
+        }
         Profiles.State.CanAsk -> {
             Text("LinkPilot needs Android's permission to reach its copy there.", style = small)
             TextButton(onClick = { Profiles.askIntent(ctx)?.let { ctx.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) {
@@ -363,6 +381,16 @@ fun WorkProfileBrowsers(m: Model, user: android.os.UserHandle, chosen: Category?
             TextButton(onClick = { everything = !everything }) { Text(if (everything) "Show only browsers" else "Show all its apps") }
         }
     }
+}
+
+// Opens Island, where LinkPilot is cloned into the work profile - only if Island is installed (it lets
+// no other app clone an app).
+@Composable
+fun IslandButton() {
+    val ctx = LocalContext.current
+    val island = remember { Profiles.islandIntent(ctx) } ?: return
+    OutlinedButton(onClick = { try { ctx.startActivity(island) } catch (_: Exception) { } }) { Text("Open Island") }
+    Text("There: tap LinkPilot, then Clone.", style = MaterialTheme.typography.bodySmall)
 }
 
 // ---- Shortcuts: Quick Settings tiles, home-screen widgets -----------------------------------------
@@ -513,12 +541,15 @@ fun AddRuleDialog(m: Model, byApp: Boolean, close: () -> Unit) {
     val ctx = LocalContext.current
     val store = m.store
     val names = store.categories.map { it.name }
-    var category by remember { mutableStateOf(names.firstOrNull()) }
+    var category by remember { mutableStateOf(store.live()?.name ?: names.firstOrNull()) }   // the live one to begin with
     var address by remember { mutableStateOf("") }
     var app by remember { mutableStateOf<Browsers.App?>(null) }
     var search by remember { mutableStateOf("") }
-    val recent = remember { store.recentApps.map { Browsers.App(it, Browsers.label(ctx, it)) } }
-    val apps = remember { Browsers.apps(ctx) }
+    val recent = remember { store.recentApps.map { key -> Profiles.splitKey(key).let { (pkg, p) -> Browsers.App(pkg, m.appLabel(key), p) } } }
+    // this profile's apps, then the work profile's - their links come here through LinkPilot over there
+    val work = remember { Profiles.others(ctx).flatMap { Profiles.apps(ctx, it) }.map { Browsers.App(it.pkg, it.label + " (work)", it.profile) } }
+    val apps = remember { Browsers.apps(ctx) + work }
+    fun same(a: Browsers.App, b: Browsers.App?) = b != null && a.pkg == b.pkg && a.profile == b.profile
 
     AlertDialog(
         onDismissRequest = close,
@@ -529,12 +560,18 @@ fun AddRuleDialog(m: Model, byApp: Boolean, close: () -> Unit) {
                     OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Find an app") }, singleLine = true)
                     val shown = (if (search.isBlank()) recent else emptyList()) +
                                 apps.filter { a -> search.isBlank() || a.label.contains(search.trim(), ignoreCase = true) }
-                                    .filter { a -> search.isNotBlank() || recent.none { it.pkg == a.pkg } }
+                                    .filter { a -> search.isNotBlank() || recent.none { same(it, a) } }
                     if (recent.isNotEmpty() && search.isBlank()) Text("Opened links lately first", style = MaterialTheme.typography.bodySmall)
-                    shown.take(80).forEach { a ->
+                    if (work.isNotEmpty()) Text("Apps marked (work) are in the work profile: their links come here when " +
+                        "LinkPilot there is that profile's default browser.", style = MaterialTheme.typography.bodySmall)
+                    shown.take(120).forEach { a ->
                         Row(Modifier.fillMaxWidth().clickable { app = a }, verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = app?.pkg == a.pkg, onClick = { app = a })
-                            AppIcon(a.pkg); Spacer(Modifier.width(8.dp)); Text(a.label)
+                            RadioButton(selected = same(a, app), onClick = { app = a })
+                            if (a.profile == null) AppIcon(a.pkg) else {
+                                val icon = remember(a.pkg) { m.appIcon(Profiles.appKey(a.pkg, a.profile)) }
+                                if (icon != null) Image(icon, null, Modifier.size(36.dp)) else Spacer(Modifier.size(36.dp))
+                            }
+                            Spacer(Modifier.width(8.dp)); Text(a.label)
                         }
                     }
                 } else {
@@ -549,7 +586,7 @@ fun AddRuleDialog(m: Model, byApp: Boolean, close: () -> Unit) {
         },
         confirmButton = {
             TextButton(enabled = category != null && (if (byApp) app != null else Router.cleanAddress(address).isNotEmpty()), onClick = {
-                val rule = if (byApp) Rule(true, true, app!!.label, app!!.pkg, category!!)
+                val rule = if (byApp) Rule(true, true, app!!.label, app!!.pkg, category!!, app!!.profile)
                            else Rule(true, false, Router.cleanAddress(address), Router.cleanAddress(address).lowercase(), category!!)
                 store.rules = store.rules + rule
                 m.changed(); close()

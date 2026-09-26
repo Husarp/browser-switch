@@ -128,12 +128,20 @@ class Model(val app: Context) {
 
     private fun key(c: Category) = c.pkg + "|" + (c.profile ?: "")
     fun label(c: Category): String = labels.getOrPut("c:" + key(c)) { Browsers.label(app, c) }
-    fun appLabel(pkg: String): String = labels.getOrPut(pkg) { Browsers.label(app, pkg) }
+    // An app by its key (Profiles.appKey) - one in the work profile is "Signal (work)", with the work badge.
+    fun appLabel(key: String): String = labels.getOrPut(key) {
+        val (pkg, profile) = Profiles.splitKey(key)
+        val user = profile?.let { Profiles.user(app, it) }
+        if (profile == null) Browsers.label(app, pkg) else (user?.let { Profiles.label(app, pkg, it) } ?: pkg) + " (work)"
+    }
     fun icon(c: Category): ImageBitmap? =
         icons[key(c)] ?: Browsers.icon(app, c)?.toBitmap(96, 96)?.asImageBitmap()?.also { icons[key(c)] = it }
     // an app's icon, for the link log - null for one that is gone
-    fun appIcon(pkg: String): ImageBitmap? = icons["a:$pkg"] ?: try {
-        app.packageManager.getApplicationIcon(pkg).toBitmap(64, 64).asImageBitmap().also { icons["a:$pkg"] = it }
+    fun appIcon(key: String): ImageBitmap? = icons["a:$key"] ?: try {
+        val (pkg, profile) = Profiles.splitKey(key)
+        val drawable = if (profile == null) app.packageManager.getApplicationIcon(pkg)
+                       else Profiles.icon(app, pkg, Profiles.user(app, profile)!!)!!
+        drawable.toBitmap(64, 64).asImageBitmap().also { icons["a:$key"] = it }
     } catch (_: Exception) { null }
 }
 

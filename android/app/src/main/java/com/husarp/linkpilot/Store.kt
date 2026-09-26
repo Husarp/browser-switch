@@ -15,7 +15,10 @@ import java.util.Locale
 data class Category(val name: String, val pkg: String, val profile: Long? = null)
 
 // Links from an app (byApp: match is its package name) or to an address, sent to a category.
-data class Rule(val on: Boolean, val byApp: Boolean, val shown: String, val match: String, val category: String) {
+// profile: for an app in the work profile, that profile's serial number (its links come here through
+// LinkPilot over there - Profiles.relay); null for an app in this profile.
+data class Rule(val on: Boolean, val byApp: Boolean, val shown: String, val match: String, val category: String,
+                val profile: Long? = null) {
     fun describe() = if (byApp) "comes from $shown" else "address $shown"
 }
 
@@ -46,10 +49,12 @@ class Store(context: Context) {
 
     var rules: List<Rule>
         get() = objects("rules").map {
-            Rule(it.optBoolean("on", true), it.optBoolean("byApp"), it.optString("shown"), it.optString("match"), it.optString("category"))
+            Rule(it.optBoolean("on", true), it.optBoolean("byApp"), it.optString("shown"), it.optString("match"), it.optString("category"),
+                 if (it.has("profile")) it.getLong("profile") else null)
         }
-        set(v) = put("rules", v.map {
-            JSONObject().put("on", it.on).put("byApp", it.byApp).put("shown", it.shown).put("match", it.match).put("category", it.category)
+        set(v) = put("rules", v.map { r ->
+            JSONObject().put("on", r.on).put("byApp", r.byApp).put("shown", r.shown).put("match", r.match).put("category", r.category)
+                .also { o -> r.profile?.let { o.put("profile", it) } }
         })
 
     var rulesOn by flag("rulesOn", true)
@@ -73,7 +78,8 @@ class Store(context: Context) {
         get() = prefs.getStringSet("redirectsOff", emptySet())!!.toSet()
         set(v) = prefs.edit().putStringSet("redirectsOff", v).apply()
 
-    // Apps that sent links lately, newest first - offered first when making an app rule.
+    // Apps that sent links lately, newest first - offered first when making an app rule. Each is a
+    // package name, or "package@serial" for an app in the work profile (Profiles.appKey).
     var recentApps: List<String>
         get() = (prefs.getString("recentApps", "") ?: "").split('\n').filter { it.isNotBlank() }
         set(v) = prefs.edit().putString("recentApps", v.take(20).joinToString("\n")).apply()
